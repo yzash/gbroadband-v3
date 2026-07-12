@@ -7,7 +7,9 @@ services:
     name: sdal-demo
     runtime: node
     plan: starter # needs a persistent process + disk; free tier sleeps and has no disk
-    buildCommand: npm ci && npm run build && npm run seed
+    # Seeding happens on first boot (the engine auto-seeds an empty DB), since the
+    # persistent disk is only mounted at runtime, not during build.
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
