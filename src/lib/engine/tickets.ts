@@ -94,6 +94,33 @@ export function ticketingPass(
   return { opened, deflected, invalid };
 }
 
+/** Ticket storm: a burst of invalid/user-side tickets from random online lines. */
+export function spawnInvalidTickets(db: DB, rng: RNG, simMin: number, n: number): number {
+  const lines = (db.prepare("SELECT line_id, subscriber_id FROM lines l JOIN subscribers s ON s.line_id=l.line_id WHERE l.status='online' LIMIT 2000").all() as {
+    line_id: string;
+    subscriber_id: string;
+  }[]);
+  if (lines.length === 0) return 0;
+  const openByLine = new Set(
+    (db.prepare("SELECT DISTINCT line_id FROM tickets WHERE closed_at IS NULL").all() as { line_id: string }[]).map((r) => r.line_id)
+  );
+  const ins = db.prepare(
+    "INSERT INTO tickets (id, line_id, subscriber_id, opened_at, kind, reason, suppressed_by_notification) VALUES (?,?,?,?,?,?,0)"
+  );
+  let made = 0;
+  const tx = db.transaction(() => {
+    for (let i = 0; i < n; i++) {
+      const l = rng.pick(lines);
+      if (openByLine.has(l.line_id)) continue;
+      ins.run(newTicketId(), l.line_id, l.subscriber_id, simMin, "invalid", "user-side (storm)");
+      openByLine.add(l.line_id);
+      made++;
+    }
+  });
+  tx();
+  return made;
+}
+
 /** Close open tickets for lines that have recovered (line back online). */
 export function closeTicketsForRecovered(db: DB, simMin: number, recoveredLines: string[]): number {
   if (!recoveredLines.length) return 0;

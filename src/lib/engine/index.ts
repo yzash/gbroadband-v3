@@ -16,7 +16,7 @@ import {
   loadSensing,
   type ImpactState,
 } from "./world";
-import { ticketingPass, closeTicketsForRecovered, resetTicketSeq } from "./tickets";
+import { ticketingPass, closeTicketsForRecovered, resetTicketSeq, spawnInvalidTickets } from "./tickets";
 import { buildSnapshot } from "./snapshot";
 import type { FaultKind, OpsSnapshot } from "../types";
 import { runDetection, resetIncidentSeq } from "./detection";
@@ -328,6 +328,33 @@ export function injectScenario(
     }
   }
   return inject({ kind, element_id: element, power_grid: powerGrid, autoClearMin: opts?.autoClearMin ?? null });
+}
+
+/** Ticket storm: inject a distribution cut + a burst of invalid tickets. */
+export function ticketStorm(): { faults: number; tickets: number } {
+  const c = core();
+  const sim = getSimState(c.db)!;
+  injectScenario("distribution_cut");
+  const n = spawnInvalidTickets(c.db, c.rng, sim.sim_min, 30);
+  logEvent("storm", `Ticket storm — distribution cut + ${n} user-side tickets`, null, "DIRECTOR");
+  publish();
+  return { faults: 1, tickets: n };
+}
+
+/** Quiet period: clear self-healing background faults so the board calms. */
+export function quietPeriod(): { cleared: number } {
+  const c = core();
+  const sim = getSimState(c.db)!;
+  const res = c.db.prepare("UPDATE faults SET resolved=1, cleared_at=? WHERE injected=0 AND resolved=0").run(sim.sim_min);
+  applyImpactNow(c, sim.sim_min);
+  logEvent("quiet", `Quiet period — ${res.changes} background faults cleared`, null, "DIRECTOR");
+  publish();
+  return { cleared: res.changes };
+}
+
+export function listOlts(): string[] {
+  const c = core();
+  return [...c.topo.nodes.values()].filter((n) => n.kind === "olt").map((n) => n.id).sort();
 }
 
 export function setSensing(cfg: { coverage?: number; alarm_delay_min?: number; dead_olt?: string | null }): OpsSnapshot {
