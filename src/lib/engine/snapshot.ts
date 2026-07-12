@@ -39,7 +39,7 @@ export function buildSnapshot(
   ).n;
 
   const learn = db.prepare("SELECT * FROM learn_daily WHERE day=?").get(day) as
-    | { calls_deflected: number; wrong_rolls: number; correct_rolls: number; repairs_in_window: number; repairs_total: number }
+    | { calls_deflected: number; wrong_rolls: number; correct_rolls: number; repairs_in_window: number; repairs_total: number; rolls_avoided: number }
     | undefined;
 
   const crewsActive = (db.prepare("SELECT COUNT(*) n FROM crew_jobs WHERE state != 'done'").get() as { n: number }).n;
@@ -146,7 +146,7 @@ export function buildSnapshot(
       avg_mttr_today: avgMttr,
       mttr_window: sim.repair_window_hrs,
       crews_active: crewsActive,
-      wrong_rolls_avoided: 0,
+      wrong_rolls_avoided: learn?.rolls_avoided ?? 0,
       peso_at_risk: pesoAtRisk,
     },
     incidents: incidents.map(rowToIncident),

@@ -369,5 +369,6 @@ CREATE TABLE IF NOT EXISTS learn_daily (
   correct_rolls    INTEGER NOT NULL DEFAULT 0,
   repairs_in_window INTEGER NOT NULL DEFAULT 0,
   repairs_total    INTEGER NOT NULL DEFAULT 0,
-  dup_tickets_merged INTEGER NOT NULL DEFAULT 0
+  dup_tickets_merged INTEGER NOT NULL DEFAULT 0,
+  rolls_avoided    INTEGER NOT NULL DEFAULT 0
 );

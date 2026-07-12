@@ -22,7 +22,16 @@ import type { FaultKind, OpsSnapshot } from "../types";
 import { runDetection, resetIncidentSeq } from "./detection";
 import { runIsolation } from "./isolation";
 import { runPrioritization } from "./prioritization";
+import {
+  generateProposals,
+  crewStep,
+  decideProposal,
+  bumpLearn,
+  resetProposalSeq,
+  resetCrewSeq,
+} from "./proposals";
 import { RecordedIndex } from "./recorded-index";
+import type { Role } from "../roles";
 
 const TICK_MS = 1000; // one real second per tick
 type Listener = (json: string) => void;
@@ -68,6 +77,8 @@ export function bootEngine(): void {
   resetFaultSeq(c.db);
   resetTicketSeq(c.db);
   resetIncidentSeq(c.db);
+  resetProposalSeq(c.db);
+  resetCrewSeq(c.db);
   c.prevImpacted = recomputeImpact(c.db, c.topo);
   publish();
   const sim = getSimState(c.db)!;
@@ -115,6 +126,7 @@ function stepWorld(minutes: number): void {
   db.prepare("UPDATE sim_state SET sim_min=? WHERE id=1").run(simMin);
 
   clearExpiredFaults(db, simMin);
+  crewStep(db, c.topo, simMin); // advance crews; completed repairs resolve faults
   const spawned = spawnBackgroundFaults(db, c.rng, c.topo, simMin, minutes);
   for (const f of spawned) {
     const impLines = f.element_id ? c.topo.linesUnder(f.element_id).length : 0;
@@ -128,13 +140,15 @@ function stepWorld(minutes: number): void {
   const next = recomputeImpact(db, c.topo);
   const { recovered } = applyLineChanges(db, c.prevImpacted, next, sensing, simMin);
   if (recovered.length) closeTicketsForRecovered(db, simMin, recovered);
-  ticketingPass(db, c.rng, simMin, minutes, next);
+  const tk = ticketingPass(db, c.rng, simMin, minutes, next);
+  if (tk.deflected > 0) bumpLearn(db, Math.floor(simMin / 1440), "calls_deflected", tk.deflected);
   updateChurnHazard(db, simMin);
 
-  // Detection fusion (M3) → isolation + scoping (M4) → MTTR + prioritization (M5).
+  // Detection (M3) → isolation + scoping (M4) → MTTR + prioritization (M5) → action ladder (M6).
   runDetection(db, c.topo, c.rec, sensing, simMin);
   runIsolation(db, c.topo, c.rec, sensing, simMin);
   runPrioritization(db);
+  generateProposals(db, c.topo);
 
   c.prevImpacted = next;
 }
@@ -204,6 +218,8 @@ export function resetWorld(): OpsSnapshot {
   resetFaultSeq(c.db);
   resetTicketSeq(c.db);
   resetIncidentSeq(c.db);
+  resetProposalSeq(c.db);
+  resetCrewSeq(c.db);
   c.prevImpacted = recomputeImpact(c.db, c.topo);
   eventSeqNudge = 0;
   publish();
@@ -220,6 +236,23 @@ function applyImpactNow(c: EngineCore, simMin: number): void {
   runDetection(c.db, c.topo, c.rec, sensing, simMin);
   runIsolation(c.db, c.topo, c.rec, sensing, simMin);
   runPrioritization(c.db);
+  generateProposals(c.db, c.topo);
+}
+
+/** Approve / reject / edit a proposal (role-gated), executing side-effects. */
+export function decide(
+  proposalId: string,
+  decision: "approve" | "reject" | "edit",
+  role: Role,
+  rationale?: string
+): { ok: boolean; error?: string } {
+  const c = core();
+  const res = decideProposal(c.db, c.topo, c.rng, proposalId, decision, role, rationale);
+  if (res.ok) {
+    applyImpactNow(c, getSimState(c.db)!.sim_min); // a remote fix / resolution may recover lines now
+    publish();
+  }
+  return res;
 }
 
 export function inject(opts: {
