@@ -140,6 +140,31 @@ export interface SimClock {
   seed: number;
 }
 
+// ---- Detections screen payload ----
+export interface DetectionDetail {
+  id: string;
+  fault_id: string | null;
+  state: IncidentState;
+  detected_via: DetectedVia;
+  telemetry_dark: boolean;
+  fault_kind: FaultKind | null;
+  fault_kind_confidence: number;
+  detection_confidence: number;
+  detected_at: number;
+  confirmed_at: number | null;
+  top_suspect: string | null;
+  top_confidence: number;
+  contributions: { signal: string; weight: number; detail: string }[];
+  samples: {
+    sim_ts: number;
+    detection_confidence: number;
+    tickets: number;
+    telemetry: number;
+    unreachable: number;
+    dying_gasp_ratio: number;
+  }[];
+}
+
 export interface OpsSnapshot {
   sim: SimClock;
   kpis: KpiBand;

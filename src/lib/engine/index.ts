@@ -19,7 +19,8 @@ import {
 import { ticketingPass, closeTicketsForRecovered, resetTicketSeq } from "./tickets";
 import { buildSnapshot } from "./snapshot";
 import type { FaultKind, OpsSnapshot } from "../types";
-import { runDetection } from "./detection";
+import { runDetection, resetIncidentSeq } from "./detection";
+import { RecordedIndex } from "./recorded-index";
 
 const TICK_MS = 1000; // one real second per tick
 type Listener = (json: string) => void;
@@ -27,6 +28,7 @@ type Listener = (json: string) => void;
 interface EngineCore {
   db: DB;
   topo: TopoIndex;
+  rec: RecordedIndex;
   rng: RNG;
   prevImpacted: Map<string, ImpactState>;
   listeners: Set<Listener>;
@@ -45,6 +47,7 @@ function core(): EngineCore {
     g.__sdal_engine = {
       db,
       topo: new TopoIndex(db),
+      rec: new RecordedIndex(db),
       rng: new RNG(sim.seed + 1000),
       prevImpacted: new Map(),
       listeners: new Set(),
@@ -62,6 +65,7 @@ export function bootEngine(): void {
   c.booted = true;
   resetFaultSeq(c.db);
   resetTicketSeq(c.db);
+  resetIncidentSeq(c.db);
   c.prevImpacted = recomputeImpact(c.db, c.topo);
   publish();
   const sim = getSimState(c.db)!;
@@ -126,7 +130,7 @@ function stepWorld(minutes: number): void {
   updateChurnHazard(db, simMin);
 
   // Detection fusion (M3): promote fault signatures into incidents.
-  runDetection(db, c.topo, sensing, simMin);
+  runDetection(db, c.topo, c.rec, sensing, simMin);
 
   c.prevImpacted = next;
 }
@@ -191,13 +195,25 @@ export function resetWorld(): OpsSnapshot {
   stopTimer();
   seedWorld(c.db);
   c.topo = new TopoIndex(c.db);
+  c.rec = new RecordedIndex(c.db);
   c.rng = new RNG(getSimState(c.db)!.seed + 1000);
   resetFaultSeq(c.db);
   resetTicketSeq(c.db);
+  resetIncidentSeq(c.db);
   c.prevImpacted = recomputeImpact(c.db, c.topo);
   eventSeqNudge = 0;
   publish();
   return getSnapshot();
+}
+
+/** Recompute impact and apply line/telemetry changes immediately (no time passes). */
+function applyImpactNow(c: EngineCore, simMin: number): void {
+  const sensing = loadSensing(c.db);
+  const next = recomputeImpact(c.db, c.topo);
+  applyLineChanges(c.db, c.prevImpacted, next, sensing, simMin);
+  c.prevImpacted = next;
+  // Fire telemetry/dying-gasp/alarm-based detection right away (tickets accrue over time).
+  runDetection(c.db, c.topo, c.rec, sensing, simMin);
 }
 
 export function inject(opts: {
@@ -210,11 +226,46 @@ export function inject(opts: {
   const c = core();
   const sim = getSimState(c.db)!;
   const f = injectFault(c.db, { ...opts, simMin: sim.sim_min });
-  c.prevImpacted = recomputeImpact(c.db, c.topo);
+  applyImpactNow(c, sim.sim_min);
   const node = c.topo.node(opts.element_id ?? "");
   logEvent("inject", `Injected ${opts.kind}${node ? ` at ${node.id}` : opts.power_grid ? ` on ${opts.power_grid}` : ""}`, null, "DIRECTOR");
   publish();
   return f;
+}
+
+/** Inject by kind, auto-selecting a plausible target element when none given. */
+export function injectScenario(
+  kind: FaultKind,
+  opts?: { element_id?: string | null; power_grid?: string | null; autoClearMin?: number | null }
+): FaultRow {
+  const c = core();
+  let element = opts?.element_id ?? null;
+  let powerGrid = opts?.power_grid ?? null;
+  const nodesOf = (k: string) => [...c.topo.nodes.values()].filter((n) => n.kind === k);
+
+  if (!element && !powerGrid) {
+    switch (kind) {
+      case "feeder_cut":
+      case "olt_port_failure":
+        element = c.rng.pick(nodesOf("pon")).id;
+        break;
+      case "distribution_cut":
+      case "splitter_failure":
+        element = c.rng.pick(nodesOf("splitter")).id;
+        break;
+      case "power_outage": {
+        const districts = c.db.prepare("SELECT DISTINCT power_grid FROM districts").all() as { power_grid: string }[];
+        powerGrid = c.rng.pick(districts).power_grid;
+        break;
+      }
+      case "noise":
+        element = c.rng.pick(nodesOf("nap")).id;
+        break;
+      default: // drop_cut, cpe_issue
+        element = c.rng.pick(c.topo.allLines);
+    }
+  }
+  return inject({ kind, element_id: element, power_grid: powerGrid, autoClearMin: opts?.autoClearMin ?? null });
 }
 
 export function setSensing(cfg: { coverage?: number; alarm_delay_min?: number; dead_olt?: string | null }): OpsSnapshot {

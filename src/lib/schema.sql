@@ -204,6 +204,18 @@ CREATE TABLE IF NOT EXISTS signal_contributions (
 );
 CREATE INDEX IF NOT EXISTS idx_sigcontrib_inc ON signal_contributions(incident_id);
 
+-- Detection time-series (drives the aligned mini-charts + confidence hardening).
+CREATE TABLE IF NOT EXISTS detection_samples (
+  incident_id          TEXT NOT NULL,
+  sim_ts               INTEGER NOT NULL,
+  detection_confidence REAL NOT NULL,
+  tickets              INTEGER NOT NULL DEFAULT 0,
+  telemetry            INTEGER NOT NULL DEFAULT 0,
+  unreachable          INTEGER NOT NULL DEFAULT 0,
+  dying_gasp_ratio     REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (incident_id, sim_ts)
+);
+
 -- ---- Tickets ----
 CREATE TABLE IF NOT EXISTS tickets (
   id            TEXT PRIMARY KEY,

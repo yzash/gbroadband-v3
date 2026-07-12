@@ -72,16 +72,22 @@ export function applyLineChanges(
   const setTel = db.prepare(
     `UPDATE telemetry_latest SET rx_power=?, reachable=?, los=?, dying_gasp=?, updated_at=? WHERE line_id=?`
   );
+  // Dark lines: only the pushed dying-gasp bit is observable (no rx/reachability).
+  const setDgOnly = db.prepare(`UPDATE telemetry_latest SET dying_gasp=?, updated_at=? WHERE line_id=?`);
 
   const applyTelemetry = (lineId: string, imp: ImpactState | null) => {
-    if (!sensing.polled.has(lineId)) return; // dark line: no telemetry ever
+    const dgc = sensing.dgc.has(lineId);
+    // Dying-gasp fires on power-loss offline for capable ONTs, polled or not.
+    const dying = imp !== null && imp.status === "offline" && imp.powerLoss && dgc ? 1 : 0;
+    if (!sensing.polled.has(lineId)) {
+      if (dgc) setDgOnly.run(dying, simMin, lineId); // maintain dying-gasp only
+      return;
+    }
     if (imp === null) {
       setTel.run(-18 + rand(lineId) * 1.5, 1, 0, 0, simMin, lineId);
     } else if (imp.status === "degraded") {
       setTel.run(-27 - rand(lineId) * 3, 1, 0, 0, simMin, lineId);
     } else {
-      // offline
-      const dying = imp.powerLoss && sensing.dgc.has(lineId) ? 1 : 0;
       setTel.run(null, 0, 1, dying, simMin, lineId);
     }
   };

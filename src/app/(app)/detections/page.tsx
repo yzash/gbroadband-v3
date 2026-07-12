@@ -1,11 +1,17 @@
-import { Stub } from "@/components/PageHeader";
+import { PageHeader } from "@/components/PageHeader";
+import { DetectionsClient } from "./DetectionsClient";
 
 export default function DetectionsPage() {
   return (
-    <Stub
-      title="Detections"
-      stage="Sense → Decide handoff"
-      note="Emerging detections with the path that found them (tickets vs telemetry) arrive in M3."
-    />
+    <div className="flex h-full flex-col">
+      <PageHeader title="Detections" stage="Sense → Decide handoff">
+        <span className="text-2xs text-ink-3">
+          fused telemetry + <span className="text-record">ticket-cluster inference</span> · confidence hardens live
+        </span>
+      </PageHeader>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <DetectionsClient />
+      </div>
+    </div>
   );
 }

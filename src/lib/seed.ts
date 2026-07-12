@@ -118,7 +118,10 @@ export function seedWorld(db: DB = getDb()): SeedResult {
       const polled = rng.bool(0.7) ? 1 : 0;
       const dgc = rng.bool(0.8) ? 1 : 0;
       insSensing.run(ont.element_id, polled, dgc);
-      if (polled) insTel.run(ont.element_id, Number(rng.gaussian(-18, 1.5).toFixed(2)));
+      // A telemetry row exists for every line so the dying-gasp column can be
+      // set even for dark (un-polled) ONTs — dying-gasp is pushed via the OLT,
+      // not polled. Dark lines keep rx_power NULL / reachable 1 (no polling).
+      insTel.run(ont.element_id, polled ? Number(rng.gaussian(-18, 1.5).toFixed(2)) : null);
     }
 
     // ---- MTTR model (fault_kind × vendor × area) ----
