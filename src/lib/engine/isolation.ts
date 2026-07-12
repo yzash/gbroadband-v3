@@ -285,10 +285,14 @@ function computeBlast(
     peso = 0,
     worstHours = 0;
 
+  const linkTicket = db.prepare(
+    "UPDATE tickets SET parent_incident_id=? WHERE closed_at IS NULL AND kind='valid' AND line_id=? AND parent_incident_id IS NULL"
+  );
   const tx = db.transaction(() => {
     for (const lineId of lines) {
       const sub = subMap.get(lineId);
       const ticketed = ctx.ticketLines.has(lineId);
+      if (ticketed) linkTicket.run(incidentId, lineId); // dedup: cluster tickets to root cause
       const tel = ctx.telByLine.get(lineId);
       const polled = ctx.polled.has(lineId);
       const telSymptom = polled && !!tel && (tel.reachable === 0 || tel.los === 1);

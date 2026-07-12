@@ -30,6 +30,8 @@ import {
   resetProposalSeq,
   resetCrewSeq,
 } from "./proposals";
+import { runVerification, acceptCorrection } from "./verification";
+import { retrainModel } from "./learn-ops";
 import { RecordedIndex } from "./recorded-index";
 import type { Role } from "../roles";
 
@@ -147,6 +149,7 @@ function stepWorld(minutes: number): void {
   // Detection (M3) → isolation + scoping (M4) → MTTR + prioritization (M5) → action ladder (M6).
   runDetection(db, c.topo, c.rec, sensing, simMin);
   runIsolation(db, c.topo, c.rec, sensing, simMin);
+  runVerification(db, c.topo, c.rec, simMin); // Learn: confirm recovery or reopen
   runPrioritization(db);
   generateProposals(db, c.topo);
 
@@ -253,6 +256,26 @@ export function decide(
     publish();
   }
   return res;
+}
+
+/** Learn: retrain the MTTR model from outcomes and re-rank incidents. */
+export function retrain(): { version: number; adjusted: number } {
+  const c = core();
+  const r = retrainModel(c.db);
+  runPrioritization(c.db);
+  publish();
+  return r;
+}
+
+/** Learn: accept a suggested plant-record correction (rewrites recorded topology). */
+export function acceptRecordCorrection(correctionId: string): boolean {
+  const c = core();
+  const ok = acceptCorrection(c.db, correctionId, getSimState(c.db)!.sim_min);
+  if (ok) {
+    c.rec = new RecordedIndex(c.db); // recorded topology changed
+    publish();
+  }
+  return ok;
 }
 
 export function inject(opts: {

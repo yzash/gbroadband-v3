@@ -418,6 +418,9 @@ export function crewStep(db: DB, topo: TopoIndex, simMin: number): void {
   }
 }
 
+const VERIFY_WINDOW = 20; // sim-minutes to confirm recovery post-repair
+
+/** Attempt a repair, then enter the verification window (M8 confirms or reopens). */
 function resolveFault(
   db: DB,
   topo: TopoIndex,
@@ -426,24 +429,17 @@ function resolveFault(
   _role: Role,
   simMin: number,
   correct: boolean,
-  via: "remote" | "dispatch"
+  _via: "remote" | "dispatch"
 ): void {
-  if (inc.fault_id) {
-    const f = db.prepare("SELECT started_at FROM faults WHERE id=?").get(inc.fault_id) as { started_at: number } | undefined;
+  // Only a correct repair actually clears the underlying fault; a wrong roll
+  // leaves it live, so verification will catch it and reopen.
+  if (inc.fault_id && correct) {
     db.prepare("UPDATE faults SET resolved=1, cleared_at=? WHERE id=?").run(simMin, inc.fault_id);
-    const mttr = f ? (simMin - f.started_at) / 60 : 0;
-    const sim = getSimState(db)!;
-    const inWindow = mttr <= sim.repair_window_hrs ? 1 : 0;
-    db.prepare(
-      "INSERT INTO outcomes (id, incident_id, resolved_at, mttr_actual_hrs, in_window, verified, reopened) VALUES (?,?,?,?,?,0,0) ON CONFLICT(id) DO UPDATE SET resolved_at=excluded.resolved_at, mttr_actual_hrs=excluded.mttr_actual_hrs, in_window=excluded.in_window"
-    ).run(`OUT-${inc.id}`, inc.id, simMin, Number(mttr.toFixed(2)), inWindow);
-    const day = Math.floor(simMin / 1440);
-    bumpLearn(db, day, "repairs_total", 1);
-    if (inWindow) bumpLearn(db, day, "repairs_in_window", 1);
-    if (via === "dispatch") bumpLearn(db, day, correct ? "correct_rolls" : "wrong_rolls", 1);
   }
-  // Move to verifying — M8 runs the verification window; for now resolve directly.
-  db.prepare("UPDATE incidents SET state='resolved', resolved_at=? WHERE id=?").run(simMin, inc.id);
+  db.prepare("UPDATE incidents SET state='verifying', verify_until=?, top_suspect=COALESCE(?, top_suspect) WHERE id=?").run(
+    simMin + VERIFY_WINDOW,
+    foundAt,
+    inc.id
+  );
   void topo;
-  void foundAt;
 }

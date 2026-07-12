@@ -149,7 +149,8 @@ CREATE TABLE IF NOT EXISTS incidents (
   peso_exposure        REAL NOT NULL DEFAULT 0,
   worst_hours_down     REAL NOT NULL DEFAULT 0,
   area_class           TEXT,
-  confirming_test      TEXT
+  confirming_test      TEXT,
+  verify_until         INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_inc_state ON incidents(state);
 CREATE INDEX IF NOT EXISTS idx_inc_fault ON incidents(fault_id);

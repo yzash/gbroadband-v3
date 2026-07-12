@@ -34,10 +34,13 @@ export function runDetection(
   const ctx = buildObserveContext(db, topo, sensing);
   const faults = activeFaults(db) as FaultRow[];
 
-  // Resolve incidents whose underlying fault has cleared (background self-heal).
+  // Auto-resolve only EARLY-state incidents whose fault self-healed (background
+  // faults). Incidents under active handling (repairing/verifying/reopened) are
+  // finalized by the crew + verification flow, not here — otherwise we'd race
+  // past verification and never record the outcome.
   const activeFaultIds = new Set(faults.map((f) => f.id));
   const openInc = db
-    .prepare("SELECT id, fault_id, state FROM incidents WHERE state NOT IN ('resolved')")
+    .prepare("SELECT id, fault_id, state FROM incidents WHERE state IN ('suspected','isolating','confirmed')")
     .all() as { id: string; fault_id: string | null; state: string }[];
   for (const inc of openInc) {
     if (inc.fault_id && !activeFaultIds.has(inc.fault_id)) {
