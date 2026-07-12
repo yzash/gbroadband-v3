@@ -114,9 +114,11 @@ CREATE TABLE IF NOT EXISTS faults (
   power_grid    TEXT,            -- for area power outages
   started_at    INTEGER NOT NULL,
   cleared_at    INTEGER,
+  auto_clear_at INTEGER,          -- background faults self-resolve; injected persist until Act
   severity      REAL NOT NULL DEFAULT 1.0,
   injected      INTEGER NOT NULL DEFAULT 0,
-  resolved      INTEGER NOT NULL DEFAULT 0
+  resolved      INTEGER NOT NULL DEFAULT 0,
+  detected      INTEGER NOT NULL DEFAULT 0  -- set once an incident is opened for it
 );
 
 -- ---- Incidents: the platform's inference over faults ----

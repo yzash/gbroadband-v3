@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { placeholderSnapshot } from "@/lib/placeholder";
+import { resetWorld } from "@/lib/engine";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-// M0 placeholder — M2 restores the seeded world here (≤2s).
 export async function POST() {
-  return NextResponse.json(placeholderSnapshot());
+  const snap = resetWorld();
+  return NextResponse.json(snap);
 }

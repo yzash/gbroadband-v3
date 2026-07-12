@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { placeholderSnapshot } from "@/lib/placeholder";
+import { getSnapshotJson } from "@/lib/engine";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-// M0 placeholder — M2 wires this to the live engine snapshot.
 export function GET() {
-  return NextResponse.json(placeholderSnapshot());
+  return new NextResponse(getSnapshotJson(), {
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 }

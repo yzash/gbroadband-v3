@@ -1,25 +1,37 @@
-import { placeholderSnapshot } from "@/lib/placeholder";
+import { getSnapshotJson, subscribe } from "@/lib/engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// M0 placeholder SSE — emits the snapshot every 2s. M2 replaces this with a
-// real subscription to the engine's tick events.
+// Server-sent events: push the live snapshot on every engine tick.
 export async function GET() {
   const encoder = new TextEncoder();
-  let timer: ReturnType<typeof setInterval> | null = null;
+  let unsub: (() => void) | null = null;
+  let keepalive: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = () => {
-        const payload = JSON.stringify(placeholderSnapshot());
-        controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+      const send = (json: string) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${json}\n\n`));
+        } catch {
+          /* controller closed */
+        }
       };
-      send();
-      timer = setInterval(send, 2000);
+      send(getSnapshotJson()); // initial frame
+      unsub = subscribe(send);
+      // Comment ping keeps intermediaries from closing an idle (paused) stream.
+      keepalive = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`: ping\n\n`));
+        } catch {
+          /* ignore */
+        }
+      }, 15000);
     },
     cancel() {
-      if (timer) clearInterval(timer);
+      unsub?.();
+      if (keepalive) clearInterval(keepalive);
     },
   });
 
