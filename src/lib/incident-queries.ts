@@ -44,12 +44,14 @@ export interface BlastLineOut {
 export function listIncidents() {
   return getDb()
     .prepare(
-      `SELECT id, state, detected_via, telemetry_dark, fault_kind, fault_kind_confidence, detection_confidence,
-              top_suspect, top_confidence, observed_count, inferred_count, vip_count, b2b_count, peso_exposure,
-              worst_hours_down, predicted_mttr_p50, predicted_mttr_p90, vendor_id, rank_score, detected_at, area_class, eta_hrs
-         FROM incidents
-        WHERE state NOT IN ('resolved')
-        ORDER BY rank_score DESC, peso_exposure DESC, detected_at ASC`
+      `SELECT i.id, i.state, i.detected_via, i.telemetry_dark, i.fault_kind, i.fault_kind_confidence, i.detection_confidence,
+              i.top_suspect, i.top_confidence, i.observed_count, i.inferred_count, i.vip_count, i.b2b_count, i.peso_exposure,
+              i.worst_hours_down, i.predicted_mttr_p50, i.predicted_mttr_p90, i.vendor_id, v.name AS vendor_name,
+              i.rank_score, i.detected_at, i.area_class, i.eta_hrs
+         FROM incidents i
+         LEFT JOIN vendors v ON v.id = i.vendor_id
+        WHERE i.state NOT IN ('resolved')
+        ORDER BY i.rank_score DESC, i.peso_exposure DESC, i.detected_at ASC`
     )
     .all() as Record<string, unknown>[];
 }
@@ -58,6 +60,12 @@ export function getIncidentDetail(id: string) {
   const db = getDb();
   const incident = db.prepare("SELECT * FROM incidents WHERE id=?").get(id) as Record<string, unknown> | undefined;
   if (!incident) return null;
+  if (incident.vendor_id) {
+    const v = db.prepare("SELECT name FROM vendors WHERE id=?").get(incident.vendor_id as string) as
+      | { name: string }
+      | undefined;
+    incident.vendor_name = v?.name ?? null;
+  }
 
   const suspicions = (db
     .prepare("SELECT element_id, kind, confidence, rank, record_conflict, evidence_json FROM suspicions WHERE incident_id=? ORDER BY rank")

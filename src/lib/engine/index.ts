@@ -21,6 +21,7 @@ import { buildSnapshot } from "./snapshot";
 import type { FaultKind, OpsSnapshot } from "../types";
 import { runDetection, resetIncidentSeq } from "./detection";
 import { runIsolation } from "./isolation";
+import { runPrioritization } from "./prioritization";
 import { RecordedIndex } from "./recorded-index";
 
 const TICK_MS = 1000; // one real second per tick
@@ -130,9 +131,10 @@ function stepWorld(minutes: number): void {
   ticketingPass(db, c.rng, simMin, minutes, next);
   updateChurnHazard(db, simMin);
 
-  // Detection fusion (M3) → isolation + scoping (M4).
+  // Detection fusion (M3) → isolation + scoping (M4) → MTTR + prioritization (M5).
   runDetection(db, c.topo, c.rec, sensing, simMin);
   runIsolation(db, c.topo, c.rec, sensing, simMin);
+  runPrioritization(db);
 
   c.prevImpacted = next;
 }
@@ -217,6 +219,7 @@ function applyImpactNow(c: EngineCore, simMin: number): void {
   // Fire telemetry/dying-gasp/alarm-based detection right away (tickets accrue over time).
   runDetection(c.db, c.topo, c.rec, sensing, simMin);
   runIsolation(c.db, c.topo, c.rec, sensing, simMin);
+  runPrioritization(c.db);
 }
 
 export function inject(opts: {

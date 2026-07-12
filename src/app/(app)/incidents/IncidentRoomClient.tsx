@@ -29,6 +29,8 @@ interface IncidentListItem {
   predicted_mttr_p50: number;
   predicted_mttr_p90: number;
   vendor_id: string | null;
+  vendor_name: string | null;
+  eta_hrs: number | null;
   rank_score: number;
   area_class: string | null;
 }
@@ -172,11 +174,16 @@ function QueueRow({
       </div>
       <div className="flex items-center gap-1.5 text-2xs">
         <span className="text-ink-3">MTTR</span>
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
+        <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
           <div className={mttrOver ? "h-full bg-critical" : "h-full bg-healthy"} style={{ width: `${Math.min(100, (it.predicted_mttr_p50 / (window * 2)) * 100)}%` }} />
+          {/* repair-window threshold marker */}
+          <div className="absolute top-0 h-full w-px bg-ink-2/70" style={{ left: "50%" }} title={`window ${window}h`} />
         </div>
-        <span className="tabular-nums text-ink-2">{it.predicted_mttr_p50 ? fmtHrs(it.predicted_mttr_p50) : "—"}</span>
+        <span className={`tabular-nums ${mttrOver ? "text-critical" : "text-ink-2"}`}>
+          {it.predicted_mttr_p50 ? fmtHrs(it.predicted_mttr_p50) : "—"}
+        </span>
       </div>
+      {it.vendor_name && <div className="text-2xs text-ink-3">→ {it.vendor_name}</div>}
     </button>
   );
 }
@@ -195,6 +202,16 @@ function IncidentDetail({ detail, window, onChanged }: { detail: Detail; window:
           <FaultKindLabel kind={inc.fault_kind as never} confidence={inc.fault_kind_confidence} />
         </div>
         <DetectedViaBadge via={inc.detected_via as never} dark={!!inc.telemetry_dark} />
+      </div>
+
+      {/* MTTR / ETA / vendor / prioritization strip */}
+      <div className="flex flex-wrap items-center gap-4 rounded-md bg-surface-2 px-4 py-2 text-xs">
+        <span className="text-ink-3">Predicted MTTR <span className="ml-1 font-mono text-ink">p50 {inc.predicted_mttr_p50 ? fmtHrs(inc.predicted_mttr_p50) : "—"}</span> <span className="font-mono text-ink-2">/ p90 {inc.predicted_mttr_p90 ? fmtHrs(inc.predicted_mttr_p90) : "—"}</span></span>
+        <span className="text-ink-3">Customer ETA <span className="font-mono text-doctrine">{inc.eta_hrs ? fmtHrs(inc.eta_hrs) : "—"}</span></span>
+        <span className={inc.predicted_mttr_p50 > window ? "text-critical" : "text-healthy"}>
+          {inc.predicted_mttr_p50 > window ? `⚠ exceeds ${window}h repair window` : `within ${window}h window`}
+        </span>
+        <span className="ml-auto text-ink-3">Vendor <span className="text-ink">{inc.vendor_name ?? (inc.fault_kind === "power_outage" ? "— utility (no fiber crew)" : "—")}</span></span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
