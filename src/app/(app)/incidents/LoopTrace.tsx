@@ -6,29 +6,74 @@ interface Detail {
   events: { sim_ts: number; kind: string; text: string; source: string }[];
 }
 
-/** Loop Trace — early version (M4): the detection/isolation timeline.
- *  Enriched with decisions, crew states, verification and record corrections in M7. */
+// Map each event kind to a loop stage + colour.
+const STAGE: Record<string, { stage: "Sense" | "Decide" | "Act" | "Learn"; color: string }> = {
+  signal: { stage: "Sense", color: "#4c8dff" },
+  detection: { stage: "Sense", color: "#4c8dff" },
+  inject: { stage: "Sense", color: "#4c8dff" },
+  proposal: { stage: "Decide", color: "#c98cff" },
+  hold: { stage: "Decide", color: "#c98cff" },
+  guardrail: { stage: "Decide", color: "#c98cff" },
+  test: { stage: "Decide", color: "#c98cff" },
+  decision: { stage: "Act", color: "#e8933a" },
+  dispatch: { stage: "Act", color: "#e8933a" },
+  crew: { stage: "Act", color: "#e8933a" },
+  remote: { stage: "Act", color: "#e8933a" },
+  notify: { stage: "Act", color: "#e8933a" },
+  credit: { stage: "Act", color: "#e8933a" },
+  repair: { stage: "Learn", color: "#2fbf87" },
+  verify: { stage: "Learn", color: "#2fbf87" },
+  reopen: { stage: "Learn", color: "#e5573f" },
+  correction: { stage: "Learn", color: "#2fbf87" },
+};
+
+/** Loop Trace — the incident's full Sense → Decide → Act → Learn timeline. */
 export function LoopTrace({ detail }: { detail: Detail }) {
   return (
     <section className="card p-4">
-      <h3 className="section-title mb-2">Loop Trace · Sense → Decide → Act → Learn</h3>
+      <div className="mb-3 flex items-center gap-3">
+        <h3 className="section-title">Loop Trace</h3>
+        <div className="flex items-center gap-2 text-2xs text-ink-3">
+          <Legend color="#4c8dff" label="Sense" />
+          <Legend color="#c98cff" label="Decide" />
+          <Legend color="#e8933a" label="Act" />
+          <Legend color="#2fbf87" label="Learn" />
+        </div>
+      </div>
       {detail.events.length === 0 ? (
-        <p className="text-xs text-ink-3">Trace builds as the incident progresses.</p>
+        <p className="text-xs text-ink-3">Trace builds as the incident progresses — first ticket → burst → isolation → decisions → crew → verification → outcomes.</p>
       ) : (
-        <ol className="relative ml-2 border-l border-line">
-          {detail.events.map((e, i) => (
-            <li key={i} className="mb-2 ml-4">
-              <span className="absolute -left-1.5 mt-1 h-3 w-3 rounded-full border-2 border-base bg-doctrine" />
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-2xs text-ink-3">{fmtSimTime(e.sim_ts)}</span>
-                <span className="chip bg-surface-3 text-ink-3">{e.source}</span>
-              </div>
-              <div className="text-xs text-ink-2">{e.text}</div>
-            </li>
-          ))}
+        <ol className="relative ml-1 border-l border-line pl-4">
+          {detail.events.map((e, i) => {
+            const s = STAGE[e.kind] ?? { stage: "Act", color: "#6b7896" };
+            return (
+              <li key={i} className="mb-2.5">
+                <span
+                  className="absolute -left-[7px] mt-1 h-3.5 w-3.5 rounded-full border-2 border-base"
+                  style={{ background: s.color }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-2xs text-ink-3">{fmtSimTime(e.sim_ts)}</span>
+                  <span className="chip" style={{ background: `${s.color}22`, color: s.color }}>
+                    {s.stage}
+                  </span>
+                  <span className="text-2xs text-ink-3">{e.source}</span>
+                </div>
+                <div className="mt-0.5 text-xs text-ink-2">{e.text}</div>
+              </li>
+            );
+          })}
         </ol>
       )}
-      <p className="mt-2 text-2xs text-ink-3">Full richer trace (decisions, crew, verification, record corrections) lands in M7.</p>
     </section>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <i className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
   );
 }

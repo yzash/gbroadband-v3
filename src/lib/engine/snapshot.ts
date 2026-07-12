@@ -128,6 +128,23 @@ export function buildSnapshot(
     .prepare("SELECT id as job_id, vendor_id, grid_x, grid_y, state, incident_id FROM crew_jobs WHERE state != 'done'")
     .all() as CrewGlyph[];
 
+  // MTTR histogram (today's resolved repairs) vs the repair-window threshold.
+  const bins: [number, number][] = [
+    [0, 2],
+    [2, 4],
+    [4, 6],
+    [6, 8],
+    [8, 999],
+  ];
+  const mttr_hist = bins.map(([lo, hi]) => {
+    const n = (
+      db
+        .prepare("SELECT COUNT(*) n FROM outcomes WHERE resolved_at >= ? AND mttr_actual_hrs >= ? AND mttr_actual_hrs < ?")
+        .get(day * 1440, lo, hi) as { n: number }
+    ).n;
+    return { bucket: hi === 999 ? "8h+" : `${lo}–${hi}h`, count: n, over: lo >= sim.repair_window_hrs };
+  });
+
   return {
     sim: {
       simMin: sim.sim_min,
@@ -153,7 +170,7 @@ export function buildSnapshot(
     ticker,
     crews: crews.map((c) => ({ ...c, state: c.state as CrewGlyph["state"] })),
     ticket_flow,
-    mttr_hist: [],
+    mttr_hist,
     element_health,
     sensing_health: {
       coverage: sim.sensing_coverage,
