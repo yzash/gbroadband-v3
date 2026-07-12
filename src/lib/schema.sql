@@ -141,7 +141,15 @@ CREATE TABLE IF NOT EXISTS incidents (
   predicted_mttr_p90   REAL NOT NULL DEFAULT 0,
   eta_hrs              REAL,
   vendor_id            TEXT,
-  rank_score           REAL NOT NULL DEFAULT 0
+  rank_score           REAL NOT NULL DEFAULT 0,
+  observed_count       INTEGER NOT NULL DEFAULT 0,
+  inferred_count       INTEGER NOT NULL DEFAULT 0,
+  vip_count            INTEGER NOT NULL DEFAULT 0,
+  b2b_count            INTEGER NOT NULL DEFAULT 0,
+  peso_exposure        REAL NOT NULL DEFAULT 0,
+  worst_hours_down     REAL NOT NULL DEFAULT 0,
+  area_class           TEXT,
+  confirming_test      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_inc_state ON incidents(state);
 CREATE INDEX IF NOT EXISTS idx_inc_fault ON incidents(fault_id);

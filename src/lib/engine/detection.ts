@@ -5,6 +5,7 @@ import type { TopoIndex } from "./topo-index";
 import type { RecordedIndex } from "./recorded-index";
 import { activeFaults, faultImpact, type FaultRow } from "./faults";
 import type { SensingSets } from "./world";
+import { buildObserveContext, gatherObserved, type Observed } from "./observe";
 
 let incidentSeq = 0;
 export function resetIncidentSeq(db: DB) {
@@ -13,15 +14,6 @@ export function resetIncidentSeq(db: DB) {
 function newIncidentId(): string {
   incidentSeq++;
   return `INC-${String(incidentSeq).padStart(3, "0")}`;
-}
-
-interface Observed {
-  lineId: string;
-  viaTicket: boolean;
-  viaTelemetry: boolean;
-  unreachable: boolean;
-  dyingGasp: boolean;
-  degraded: boolean;
 }
 
 /**
@@ -39,29 +31,7 @@ export function runDetection(
   simMin: number
 ): void {
   const sim = getSimState(db)!;
-
-  // Open valid tickets per line (what the platform hears from customers).
-  const ticketLines = new Set(
-    (db.prepare("SELECT DISTINCT line_id FROM tickets WHERE closed_at IS NULL AND kind='valid'").all() as {
-      line_id: string;
-    }[]).map((r) => r.line_id)
-  );
-
-  // Telemetry symptoms on polled lines.
-  const telRows = db
-    .prepare("SELECT line_id, rx_power, reachable, los, dying_gasp FROM telemetry_latest")
-    .all() as { line_id: string; rx_power: number | null; reachable: number; los: number; dying_gasp: number }[];
-  const telByLine = new Map(telRows.map((t) => [t.line_id, t]));
-
-  // Truth OLT per line (dying-gasp is suppressed when that OLT's feed is dead).
-  const oltCache = new Map<string, string | null>();
-  const oltOf = (lineId: string): string | null => {
-    if (oltCache.has(lineId)) return oltCache.get(lineId)!;
-    const olt = [lineId, ...topo.ancestors(lineId)].find((id) => topo.node(id)?.kind === "olt") ?? null;
-    oltCache.set(lineId, olt);
-    return olt;
-  };
-
+  const ctx = buildObserveContext(db, topo, sensing);
   const faults = activeFaults(db) as FaultRow[];
 
   // Resolve incidents whose underlying fault has cleared (background self-heal).
@@ -79,27 +49,7 @@ export function runDetection(
     const impact = faultImpact(f, topo);
     if (impact.lines.length === 0) continue;
 
-    // What we can observe among the truly-impacted lines.
-    const observed: Observed[] = [];
-    for (const lineId of impact.lines) {
-      const hasTicket = ticketLines.has(lineId);
-      const tel = telByLine.get(lineId);
-      const polled = sensing.polled.has(lineId);
-      const telSymptom =
-        polled && !!tel && (tel.reachable === 0 || tel.los === 1 || (tel.rx_power !== null && tel.rx_power < -26));
-      // Dying-gasp is pushed via the OLT — observable even on dark lines,
-      // unless that OLT's alarm feed is down.
-      const dyingGasp = !!tel && tel.dying_gasp === 1 && oltOf(lineId) !== sensing.deadOlt;
-      if (!hasTicket && !telSymptom && !dyingGasp) continue;
-      observed.push({
-        lineId,
-        viaTicket: hasTicket,
-        viaTelemetry: telSymptom,
-        unreachable: polled && !!tel && tel.reachable === 0,
-        dyingGasp,
-        degraded: impact.status === "degraded",
-      });
-    }
+    const observed = gatherObserved(f, topo, ctx);
     if (observed.length === 0) continue; // undetectable right now (fully dark, no calls)
 
     const locus = localize(observed, rec);

@@ -183,6 +183,11 @@ interface IncidentSummaryRow {
   eta_hrs: number | null;
   vendor_id: string | null;
   rank_score: number;
+  observed_count: number;
+  inferred_count: number;
+  vip_count: number;
+  peso_exposure: number;
+  worst_hours_down: number;
 }
 
 function rowToIncident(r: IncidentSummaryRow): IncidentSummary {
@@ -199,13 +204,13 @@ function rowToIncident(r: IncidentSummaryRow): IncidentSummary {
     resolved_at: r.resolved_at,
     top_suspect: r.top_suspect,
     top_confidence: r.top_confidence,
-    observed_count: 0,
-    inferred_count: 0,
-    vip_count: 0,
-    peso_exposure: 0,
+    observed_count: r.observed_count,
+    inferred_count: r.inferred_count,
+    vip_count: r.vip_count,
+    peso_exposure: r.peso_exposure,
     predicted_mttr_p50: r.predicted_mttr_p50,
     predicted_mttr_p90: r.predicted_mttr_p90,
-    worst_hours_down: 0,
+    worst_hours_down: r.worst_hours_down,
     rank_score: r.rank_score,
     vendor_id: r.vendor_id,
     detection_confidence: r.detection_confidence,

@@ -7,6 +7,7 @@ interface RecNode {
   parent: string | null;
   district: string | null;
   confidence: number;
+  mismapped: boolean;
   grid_x: number | null;
   grid_y: number | null;
 }
@@ -25,7 +26,7 @@ export class RecordedIndex {
   constructor(db: DB) {
     const rows = db
       .prepare(
-        "SELECT element_id, kind, parent_id_recorded, district_id, record_confidence, grid_x, grid_y FROM topology_recorded"
+        "SELECT element_id, kind, parent_id_recorded, district_id, record_confidence, mismapped, grid_x, grid_y FROM topology_recorded"
       )
       .all() as {
       element_id: string;
@@ -33,6 +34,7 @@ export class RecordedIndex {
       parent_id_recorded: string | null;
       district_id: string | null;
       record_confidence: number;
+      mismapped: number;
       grid_x: number | null;
       grid_y: number | null;
     }[];
@@ -43,6 +45,7 @@ export class RecordedIndex {
         parent: r.parent_id_recorded,
         district: r.district_id,
         confidence: r.record_confidence,
+        mismapped: r.mismapped === 1,
         grid_x: r.grid_x,
         grid_y: r.grid_y,
       });
