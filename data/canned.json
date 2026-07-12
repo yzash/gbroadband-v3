@@ -1,0 +1,9 @@
+{
+  "_note": "Reference snapshot for DEMO_MODE=canned. The Ask router computes answers from live data via the incident tools; this file documents the canonical suggested prompts and their expected tool routing.",
+  "suggested": [
+    { "prompt": "What's impacting the most revenue right now?", "tool": "query_incidents" },
+    { "prompt": "Why do we think the fault is at SPL-44 and not SPL-41?", "tool": "get_isolation" },
+    { "prompt": "How many affected customers haven't called yet?", "tool": "get_blast_radius" },
+    { "prompt": "Draft the customer notification for INC-1.", "tool": "draft_proposal" }
+  ]
+}
