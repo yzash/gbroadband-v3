@@ -1,0 +1,27 @@
+# Render blueprint for the SDAL Demo.
+# A persistent Web Service (not serverless) so the in-process simulation
+# singleton and the SSE stream stay alive, with a mounted disk that keeps
+# the SQLite database across restarts and deploys.
+services:
+  - type: web
+    name: sdal-demo
+    runtime: node
+    plan: starter # needs a persistent process + disk; free tier sleeps and has no disk
+    buildCommand: npm ci && npm run build && npm run seed
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DEMO_MODE
+        value: canned
+      - key: SDAL_DB_PATH
+        value: /var/data/sdal.db
+      - key: SDAL_SEED
+        value: "42"
+      - key: GEMINI_API_KEY
+        sync: false # set in dashboard only if DEMO_MODE=live
+    disk:
+      name: sdal-data
+      mountPath: /var/data
+      sizeGB: 1
