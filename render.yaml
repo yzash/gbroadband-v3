@@ -21,6 +21,8 @@ services:
         value: /var/data/sdal.db
       - key: SDAL_SEED
         value: "42"
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1" # playwright is a local-only screenshot tool; don't fetch browsers on install
       - key: GEMINI_API_KEY
         sync: false # set in dashboard only if DEMO_MODE=live
     disk:
