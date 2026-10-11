@@ -15,7 +15,7 @@ interface Metrics {
   repairsInWindow: number;
   repairsInWindowPct: number;
   dupMerged: number;
-  retention: { holdoutHaz: number; treatedHaz: number; lift: number };
+  retention: { holdoutHaz: number; treatedHaz: number; lift: number | null; treatedN: number; controlN: number };
   corrections: { id: string; line_id: string; from_parent: string; to_parent: string; status: string; incident_id: string; sim_ts: number }[];
   correctionsAccepted: number;
   correctionsSuggested: number;
@@ -67,7 +67,16 @@ export function LearnClient() {
 
       {/* Headline metrics */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Tile label="Retention lift vs holdout" value={pct(m.retention.lift, 0)} sub={`holdout churn ${pct(m.retention.holdoutHaz)} → treated ${pct(m.retention.treatedHaz)}`} accent="healthy" />
+        {m.retention.lift === null ? (
+          <Tile label="Retention lift vs holdout" value="—" sub="measured once a proactive notification goes out" />
+        ) : (
+          <Tile
+            label="Retention lift vs holdout"
+            value={`${m.retention.lift > 0 ? "+" : ""}${pct(m.retention.lift, 0)}`}
+            sub={`peak churn risk ${(m.retention.holdoutHaz * 100).toFixed(2)}% held-out → ${(m.retention.treatedHaz * 100).toFixed(2)}% notified (n=${m.retention.treatedN}/${m.retention.controlN})`}
+            accent={m.retention.lift > 0 ? "healthy" : "critical"}
+          />
+        )}
         <Tile label="Calls deflected" value={m.deflected.toLocaleString()} sub="cumulative · notification-driven" accent="healthy" />
         <Tile label="Wrong-roll rate" value={pct(m.wrongRollRate, 0)} sub={`${m.correctRolls} correct · ${m.wrongRolls} wrong`} accent={m.wrongRollRate > 0.2 ? "critical" : "healthy"} />
         <Tile label="Rolls avoided" value={String(m.rollsAvoided)} sub="dedup + power-outage guardrail" accent="healthy" />

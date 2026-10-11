@@ -9,9 +9,9 @@ import { HEALTH_HEX } from "@/lib/tokens";
 import type { DetectionDetail } from "@/lib/types";
 
 const SIGNAL_COLOR: Record<string, string> = {
-  tickets: "#c98cff",
+  tickets: "#A98BFF",
   telemetry: HEALTH_HEX.healthy,
-  reachability: "#4c8dff",
+  reachability: "#2F6BFF",
   alarm: HEALTH_HEX.degraded,
   dying_gasp: HEALTH_HEX.critical,
 };
@@ -94,7 +94,7 @@ function DetectionCard({ d }: { d: DetectionDetail }) {
           <div className="flex-1">
             <ConfidenceBar value={d.detection_confidence} />
           </div>
-          <Sparkline values={confSeries} color="#4c8dff" width={90} height={24} max={1} fill />
+          <Sparkline values={confSeries} color="#2F6BFF" width={90} height={24} max={1} fill />
         </div>
       </div>
 
@@ -122,7 +122,7 @@ function DetectionCard({ d }: { d: DetectionDetail }) {
           <div key={c.signal} className="flex items-center gap-2 text-xs">
             <span className="w-24 shrink-0 capitalize text-ink-2">{c.signal.replace("_", " ")}</span>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
-              <div className="h-full" style={{ width: `${Math.round(c.weight * 100)}%`, background: SIGNAL_COLOR[c.signal] ?? "#7aa7ff" }} />
+              <div className="h-full" style={{ width: `${Math.round(c.weight * 100)}%`, background: SIGNAL_COLOR[c.signal] ?? "#3CB7FF" }} />
             </div>
             <span className="text-2xs text-ink-3">{c.detail}</span>
           </div>

@@ -8,23 +8,23 @@ interface Detail {
 
 // Map each event kind to a loop stage + colour.
 const STAGE: Record<string, { stage: "Sense" | "Decide" | "Act" | "Learn"; color: string }> = {
-  signal: { stage: "Sense", color: "#4c8dff" },
-  detection: { stage: "Sense", color: "#4c8dff" },
-  inject: { stage: "Sense", color: "#4c8dff" },
-  proposal: { stage: "Decide", color: "#c98cff" },
-  hold: { stage: "Decide", color: "#c98cff" },
-  guardrail: { stage: "Decide", color: "#c98cff" },
-  test: { stage: "Decide", color: "#c98cff" },
-  decision: { stage: "Act", color: "#e8933a" },
-  dispatch: { stage: "Act", color: "#e8933a" },
-  crew: { stage: "Act", color: "#e8933a" },
-  remote: { stage: "Act", color: "#e8933a" },
-  notify: { stage: "Act", color: "#e8933a" },
-  credit: { stage: "Act", color: "#e8933a" },
-  repair: { stage: "Learn", color: "#2fbf87" },
-  verify: { stage: "Learn", color: "#2fbf87" },
-  reopen: { stage: "Learn", color: "#e5573f" },
-  correction: { stage: "Learn", color: "#2fbf87" },
+  signal: { stage: "Sense", color: "#3CB7FF" },
+  detection: { stage: "Sense", color: "#3CB7FF" },
+  inject: { stage: "Sense", color: "#3CB7FF" },
+  proposal: { stage: "Decide", color: "#A98BFF" },
+  hold: { stage: "Decide", color: "#A98BFF" },
+  guardrail: { stage: "Decide", color: "#A98BFF" },
+  test: { stage: "Decide", color: "#A98BFF" },
+  decision: { stage: "Act", color: "#2F6BFF" },
+  dispatch: { stage: "Act", color: "#2F6BFF" },
+  crew: { stage: "Act", color: "#2F6BFF" },
+  remote: { stage: "Act", color: "#2F6BFF" },
+  notify: { stage: "Act", color: "#2F6BFF" },
+  credit: { stage: "Act", color: "#2F6BFF" },
+  repair: { stage: "Learn", color: "#1FC98E" },
+  verify: { stage: "Learn", color: "#1FC98E" },
+  reopen: { stage: "Learn", color: "#FF4D5E" },
+  correction: { stage: "Learn", color: "#1FC98E" },
 };
 
 /** Loop Trace — the incident's full Sense → Decide → Act → Learn timeline. */
@@ -34,10 +34,10 @@ export function LoopTrace({ detail }: { detail: Detail }) {
       <div className="mb-3 flex items-center gap-3">
         <h3 className="section-title">Loop Trace</h3>
         <div className="flex items-center gap-2 text-2xs text-ink-3">
-          <Legend color="#4c8dff" label="Sense" />
-          <Legend color="#c98cff" label="Decide" />
-          <Legend color="#e8933a" label="Act" />
-          <Legend color="#2fbf87" label="Learn" />
+          <Legend color="#3CB7FF" label="Sense" />
+          <Legend color="#A98BFF" label="Decide" />
+          <Legend color="#2F6BFF" label="Act" />
+          <Legend color="#1FC98E" label="Learn" />
         </div>
       </div>
       {detail.events.length === 0 ? (
@@ -45,7 +45,7 @@ export function LoopTrace({ detail }: { detail: Detail }) {
       ) : (
         <ol className="relative ml-1 border-l border-line pl-4">
           {detail.events.map((e, i) => {
-            const s = STAGE[e.kind] ?? { stage: "Act", color: "#6b7896" };
+            const s = STAGE[e.kind] ?? { stage: "Act", color: "#7586AE" };
             return (
               <li key={i} className="mb-2.5">
                 <span

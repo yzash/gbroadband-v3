@@ -131,6 +131,17 @@ export interface CrewGlyph {
   grid_y: number;
   state: "enroute" | "onsite" | "done";
   incident_id: string | null;
+  target_element: string;
+  /** Current position: interpolated from the exchange to the site while en route. */
+  lat: number | null;
+  lon: number | null;
+  /** Origin (dispatching exchange) and destination, for drawing the route. */
+  from_lat: number | null;
+  from_lon: number | null;
+  to_lat: number | null;
+  to_lon: number | null;
+  progress: number; // 0..1 of travel
+  eta_min: number; // sim-minutes until on site (0 once arrived)
 }
 
 export interface SimClock {
@@ -165,6 +176,17 @@ export interface DetectionDetail {
   }[];
 }
 
+/** Per-city rollup for the map choropleth (keyed by NCR city name). */
+export interface CityStat {
+  lines: number;
+  impacted: number;
+  offline: number;
+  sensed: number; // lines actively polled
+  tickets: number; // open valid tickets
+  peso_at_risk: number;
+  record_conf: number; // mean plant-record confidence, 0..1
+}
+
 export interface OpsSnapshot {
   sim: SimClock;
   kpis: KpiBand;
@@ -174,6 +196,8 @@ export interface OpsSnapshot {
   ticket_flow: { t: number; opened: number; deflected: number; resolved: number }[];
   mttr_hist: { bucket: string; count: number; over: boolean }[];
   element_health: Record<string, Health>; // element_id -> health (for the map)
+  city_stats: Record<string, CityStat>;
+  ticketed_lines: string[]; // lines with an open valid ticket (map "tickets" layer)
   sensing_health: { coverage: number; alarm_delay_min: number; dead_olt: string | null };
   generated_at: number;
 }

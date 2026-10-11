@@ -3,8 +3,9 @@ import "./globals.css";
 import { AppStateProvider } from "@/components/AppState";
 
 export const metadata: Metadata = {
-  title: "SDAL · Broadband Intelligence",
-  description: "Sense → Decide → Act → Learn — fault inference & localization under imperfect data.",
+  title: "Globe Network Assurance · SDAL",
+  description: "Sense → Decide → Act → Learn — fault inference & localization across Metro Manila, under imperfect data.",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

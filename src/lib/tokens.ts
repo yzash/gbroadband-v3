@@ -1,17 +1,18 @@
 /**
- * DevX Doctrine — shared presentational tokens used by both server and client.
+ * Shared presentational tokens used by both server and client.
  * Health ramp, provenance stamps, and formatting helpers live here so every
- * screen speaks the same visual language.
+ * screen speaks the same visual language. Colours come from ./brand.
  */
+import { BRAND } from "./brand";
 
 export type Health = "healthy" | "watch" | "degraded" | "critical" | "unsensed";
 
 export const HEALTH_HEX: Record<Health, string> = {
-  healthy: "#2fbf87",
-  watch: "#e5c95a",
-  degraded: "#e8933a",
-  critical: "#e5573f",
-  unsensed: "#48557a",
+  healthy: BRAND.healthy,
+  watch: BRAND.watch,
+  degraded: BRAND.degraded,
+  critical: BRAND.critical,
+  unsensed: BRAND.unsensed,
 };
 
 /** Map a 0..1 severity/impact ratio to a health bucket. */

@@ -6,11 +6,11 @@ const COL: Record<string, number> = { olt: 0, pon: 1, splitter: 2, nap: 3, ont: 
 const COL_LABEL = ["OLT", "PON", "Splitter", "NAP", "Line"];
 
 function suspicionColor(s: number | null): string {
-  if (s === null) return "#232d42";
-  if (s >= 0.6) return "#e5573f";
-  if (s >= 0.4) return "#e8933a";
-  if (s >= 0.2) return "#e5c95a";
-  return "#3a4a6a";
+  if (s === null) return "#172752";
+  if (s >= 0.6) return "#FF4D5E";
+  if (s >= 0.4) return "#FF8A3D";
+  if (s >= 0.2) return "#FFC542";
+  return "#2A3D70";
 }
 
 /** Recorded subtree around the suspect, heat-colored by suspicion. */
@@ -51,7 +51,7 @@ export function IsolationTree({ nodes }: { nodes: TreeNode[] }) {
         if (!n.parent || !pos.has(n.parent) || !pos.has(n.element_id)) return null;
         const p = pos.get(n.parent)!;
         const q = pos.get(n.element_id)!;
-        return <line key={`e${n.element_id}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="#2b3854" strokeWidth={1} />;
+        return <line key={`e${n.element_id}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="#2A3D70" strokeWidth={1} />;
       })}
       {/* nodes */}
       {nodes.map((n) => {
@@ -65,7 +65,7 @@ export function IsolationTree({ nodes }: { nodes: TreeNode[] }) {
               cy={p.y}
               r={isSuspect ? 9 : n.suspicion !== null ? 6 : 4}
               fill={color}
-              stroke={isSuspect ? "#e8edf7" : "#0b0f17"}
+              stroke={isSuspect ? "#EEF3FF" : "#050B1D"}
               strokeWidth={isSuspect ? 2 : 0.5}
             />
             {n.conflict && (

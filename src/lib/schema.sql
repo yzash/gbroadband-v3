@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS sim_state (
 CREATE TABLE IF NOT EXISTS districts (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
-  grid_x     INTEGER NOT NULL,
+  city       TEXT NOT NULL,         -- NCR local government unit (matches public/geo/ncr-cities.geojson)
+  lat        REAL NOT NULL,
+  lon        REAL NOT NULL,
+  grid_x     INTEGER NOT NULL,      -- projected from lat/lon (~28 m/unit), legacy consumers
   grid_y     INTEGER NOT NULL,
   area_class TEXT NOT NULL,        -- urban | suburban | fringe
   power_grid TEXT NOT NULL         -- power feeder id (area power outages cluster by this)
@@ -32,6 +35,8 @@ CREATE TABLE IF NOT EXISTS topology_truth (
   element_id  TEXT PRIMARY KEY,
   kind        TEXT NOT NULL,        -- olt | pon | splitter | nap | ont
   parent_id   TEXT,
+  lat         REAL,
+  lon         REAL,
   grid_x      INTEGER,
   grid_y      INTEGER,
   district_id TEXT,
@@ -46,6 +51,8 @@ CREATE TABLE IF NOT EXISTS topology_recorded (
   element_id        TEXT PRIMARY KEY,
   kind              TEXT NOT NULL,
   parent_id_recorded TEXT,
+  lat               REAL,             -- NULL when plant records lack a location (~6%)
+  lon               REAL,
   grid_x            INTEGER,
   grid_y            INTEGER,
   district_id       TEXT,
@@ -84,6 +91,7 @@ CREATE TABLE IF NOT EXISTS subscribers (
   holdout           INTEGER NOT NULL DEFAULT 0,  -- 10% holdout for lift measurement
   tenure_days       INTEGER NOT NULL,
   churn_hazard      REAL NOT NULL DEFAULT 0,
+  churn_peak        REAL NOT NULL DEFAULT 0,   -- highest hazard reached (Learn retention lift)
   churned           INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sub_line ON subscribers(line_id);
@@ -182,6 +190,7 @@ CREATE TABLE IF NOT EXISTS blast_radius (
   PRIMARY KEY (incident_id, line_id)
 );
 CREATE INDEX IF NOT EXISTS idx_blast_inc ON blast_radius(incident_id);
+CREATE INDEX IF NOT EXISTS idx_blast_line ON blast_radius(line_id);
 
 -- ---- MTTR model ----
 CREATE TABLE IF NOT EXISTS mttr_model (
@@ -265,6 +274,8 @@ CREATE TABLE IF NOT EXISTS crew_jobs (
   incident_id    TEXT NOT NULL,
   vendor_id      TEXT NOT NULL,
   target_element TEXT NOT NULL,
+  lat            REAL,
+  lon            REAL,
   grid_x         INTEGER,
   grid_y         INTEGER,
   state          TEXT NOT NULL DEFAULT 'enroute',  -- enroute | onsite | done

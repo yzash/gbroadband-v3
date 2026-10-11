@@ -74,8 +74,21 @@ pub/sub — the SQLite/singleton/SSE design is intentional.)*
 
 ## Screens
 
-Operations · Detections · Incident Room · Proposals & Audit · Learn · Ask (GE) ·
-Configurations — plus the hidden `/director` and `/debug/data`.
+Network Map (Operations) · Detections · Incident Room · Approvals & Audit · Learn ·
+Ask the Network · Configurations — plus the hidden `/director` and `/debug/data`.
+
+**Map.** The Network Map is a MapLibre GL (WebGL) map of real Metro Manila geography — the
+17 NCR cities from PSA PSGC 2023 boundaries (bundled; no tile server or API key needed).
+Five lenses (service health, sensing coverage, customer tickets, revenue at risk, record
+confidence) colour the cities; zooming in progressively reveals OLTs, splitters, NAPs and
+individual lines. Incidents are sized by blast radius, crews drive from the exchange to the
+site in real time, and the Incident Room shows each incident's blast radius on the map
+(called/seen vs silent customers).
+
+**Brand.** Colours and fonts follow Globe's *public* identity and are approximations — all
+in one file, [`src/lib/brand.ts`](src/lib/brand.ts) (Tailwind and the map read from it), so
+the brand team can correct hex values in one place. The logo mark in the top bar is a
+placeholder; Montserrat stands in for Globe's corporate typeface.
 
 Roles (top-right switcher): **NOC Lead** approves dispatch & tests; **CX Ops** approves
 comms & credits; **Read-only** observes.

@@ -6,7 +6,10 @@ synthetic-data generation parameters, the inference algorithms, the engine pipel
 [`src/lib/schema.sql`](src/lib/schema.sql); this document annotates it and fills in the
 generation + algorithm details the raw DDL doesn't capture.
 
-- **Store:** SQLite (`better-sqlite3`, WAL) at `SDAL_DB_PATH`. 29 tables, 17 indexes.
+- **Store:** SQLite (`better-sqlite3`, WAL) at `SDAL_DB_PATH`. 29 tables, 18 indexes.
+- **Schema version:** `PRAGMA user_version = 2`. On boot, a DB with a different version is
+  dropped and re-seeded automatically (safe for the Render disk; bump `SCHEMA_VERSION` in
+  `src/lib/db.ts` whenever `schema.sql` changes).
 - **Units:** all timestamps are **integer sim-minutes since world epoch** (`sim_min`), not
   wall-clock. `mttr`/`eta`/`hours_down` are **hours** (REAL). Money is **PHP** (REAL).
   Booleans are `INTEGER` 0/1.
@@ -82,20 +85,24 @@ INTEGER sim-minutes; `hrs`/`peso` = REAL.
 | `repair_window_hrs` | REAL | SLA-ish threshold (default 6.0) — a **setting, never a claim** |
 | `model_version` | int | active MTTR model version |
 
-**`districts`** — 40 Metro Manila areas. `grid_x/grid_y` (map coords), `area_class`
+**`districts`** — 40 real Metro Manila neighbourhoods across the 17 NCR LGUs. `city` (LGU
+name, matches `public/geo/ncr-cities.geojson`), `lat/lon` (WGS84 centroid), `grid_x/grid_y`
+(legacy projected coords, ~28 m/unit, derived from lat/lon), `area_class`
 (`urban|suburban|fringe`), `power_grid` (feeder id; area power outages cluster by this).
 
 ### 3.2 Topology (truth vs recorded)
 
 **`topology_truth`** — how the network is actually wired.
-`element_id` PK, `kind` (`olt|pon|splitter|nap|ont`), `parent_id`, `grid_x/y`, `district_id`,
+`element_id` PK, `kind` (`olt|pon|splitter|nap|ont`), `parent_id`, `lat/lon` (WGS84),
+`grid_x/y` (legacy, derived), `district_id`,
 `label`, `split_ratio` (splitters, e.g. 8), `tier` (splitter cascade level 1/2).
 Indexes: `parent_id`, `kind`.
 
 **`topology_recorded`** — the plant records the platform may read.
 Same shape but `parent_id_recorded` (may differ from truth), `record_confidence` (0..1), and
 `mismapped` (bool — 1 when the recorded parent ≠ truth). ~15% of ONT rows are mismapped;
-~6% have null coords. Indexes: `parent_id_recorded`, `kind`.
+~6% have null coords (`lat/lon/grid_*` all null — the map snaps these to their recorded
+parent and flags them as estimated). Indexes: `parent_id_recorded`, `kind`.
 
 **`sensing`** — per-line observability. `line_id` PK, `polled` (bool — telemetry ever
 available), `dying_gasp_capable` (bool). Dark lines (`polled=0`) never emit rx/reachability
@@ -106,7 +113,7 @@ telemetry, but a `dying_gasp_capable` line still emits the pushed dying-gasp on 
 **`subscribers`** — `id` PK, `line_id`, `arpu` (peso/mo), `vip`/`b2b` (bool),
 `calling_propensity` (0..1 — chance to raise a ticket when impacted), `holdout` (bool — 10%
 control group for lift), `tenure_days`, `churn_hazard` (0..1, rises with unrepaired hours,
-cut by notification/credit), `churned`.
+cut by notification/credit), `churn_peak` (highest hazard reached — lift is measured on this), `churned`.
 
 **`lines`** — `line_id` PK (== ONT), `subscriber_id`, `status`
 (`online|degraded|offline`), `degraded_since`/`offline_since` (simMin).
@@ -223,8 +230,14 @@ Generators: [`src/lib/topology.ts`](src/lib/topology.ts) (network + recorded deg
 [`src/lib/rng.ts`](src/lib/rng.ts).
 
 ### 4.1 Topology
-- **40 districts** on a grid (8 cols); `area_class` weighted urban:suburban:fringe = 5:3:2;
-  ~10 power feeders, 4 districts each.
+- **40 districts** at real NCR coordinates (hand-placed, every one validated by
+  point-in-polygon against the PSA PSGC 2023 city boundaries); `area_class` set per
+  neighbourhood (CBDs urban, edges fringe); ~10 power feeders grouping neighbouring districts.
+- **OLTs sit in 6 real exchange areas** (Sampaloc, Diliman, Ortigas Center, Makati CBD, Sucat,
+  Novaliches); each district is served by its nearest exchange with spare capacity.
+- Children are scattered around their parent (OLT → PON → splitter → NAP → ONT, shrinking
+  radius) and **rejected if they fall in the sea or outside NCR** (point-in-polygon), so every
+  element lands on land inside its city.
 - **6 OLTs** (home district each) → **4 PON ports** each = **24** → **1 primary splitter**
   (1:8, tier 1) per PON = **24** → **2 secondary splitters** (1:8, tier 2) per primary =
   **48** (72 splitters total) → **3–4 NAPs** per secondary (P(4)=0.75) ≈ **181** →
@@ -324,6 +337,15 @@ Repaired incident → `verifying` for a 20-sim-min window. If the underlying fau
 and a fresh dispatch is proposed to the corrected locus. **Retrain** blends
 `p50' = 0.6×p50 + 0.4×observed_avg`, publishes a new `model_version`, and re-ranks.
 
+### 5.6b Churn hazard & retention lift (`world.ts` → `updateChurnHazard`, `learn-queries.ts`)
+While a line is offline: `hazard = 0.02 + hours_down × 0.03 × (0.55 if notified) − (0.12 if credited)`;
+once back online it decays by `0.005 / sim-hour`; clamped 0–0.95. **The 10% holdout never
+receives notifications or credits** (excluded at send time and from recipient counts), so it is
+a true control group. Each tick also records `churn_peak` (highest hazard reached). Learn's *retention lift* =
+`1 − avg(treated churn_peak) / avg(holdout churn_peak)`,
+measured only over lines in incidents that were notified; shown as "—" until both groups
+have members.
+
 ### 5.7 Determinism
 `mulberry32` (`rng.ts`). Seeder uses `seed`; the live engine uses `seed + 1000`. Same seed +
 same command sequence ⇒ identical world; scripted `Advance 6h` from a reset is
@@ -366,7 +388,7 @@ The SSE payload shape (`OpsSnapshot`) is in [`src/lib/types.ts`](src/lib/types.t
 | `/api/proposals` · `/api/proposals/[id]/decide` | GET/POST | pending/audit + approve/reject |
 | `/api/learn` · `/api/learn/retrain` · `/api/corrections/[id]/accept` | GET/POST | metrics + retrain + accept |
 | `/api/ask` | POST | GE assistant (canned tools / live Gemini) |
-| `/api/topo-geo` | GET | static backbone geometry for the map |
+| `/api/geo` | GET | recorded-topology geometry for the map (lat/lon, parent, confidence, `est` flag) |
 | `/api/director/inject` · `/sensing` · `/scenario` | POST | scenario control |
 
 ---

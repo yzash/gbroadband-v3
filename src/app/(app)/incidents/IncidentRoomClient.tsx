@@ -7,6 +7,7 @@ import { StateChip, DetectedViaBadge, FaultKindLabel } from "@/components/ui";
 import { IsolationTree } from "./IsolationTree";
 import { ActionLadder } from "./ActionLadder";
 import { LoopTrace } from "./LoopTrace";
+import { BlastMap } from "./BlastMap";
 import { peso, pesoCompact, fmtHrs } from "@/lib/tokens";
 import type { SuspicionOut, TreeNode, BlastLineOut } from "@/lib/incident-queries";
 
@@ -40,6 +41,7 @@ interface Detail {
   suspicions: SuspicionOut[];
   contributions: { signal: string; weight: number; detail: string }[];
   blastLines: BlastLineOut[];
+  blastMap: { observed: string[]; inferred: string[] };
   isolationTree: TreeNode[];
   events: { sim_ts: number; kind: string; text: string; source: string }[];
   proposals: Record<string, unknown>[];
@@ -239,6 +241,14 @@ function IncidentDetail({ detail, window, onChanged }: { detail: Detail; window:
         {/* Blast radius panel */}
         <section className="card p-4">
           <h3 className="section-title mb-2">Blast radius · who is affected</h3>
+          <div className="mb-3">
+            <BlastMap
+              incidentId={inc.id}
+              observed={detail.blastMap.observed}
+              inferred={detail.blastMap.inferred}
+              suspect={(inc as unknown as { top_suspect: string | null }).top_suspect}
+            />
+          </div>
           <div className="mb-3 grid grid-cols-3 gap-2">
             <Metric label="Impacted" value={String(total)} sub={`${inc.observed_count} observed · ${inc.inferred_count} inferred`} />
             <Metric label="VIP / B2B" value={`${inc.vip_count} / ${inc.b2b_count}`} sub="priority lines" />

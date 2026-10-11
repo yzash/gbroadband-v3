@@ -124,7 +124,17 @@ export function getIncidentDetail(id: string) {
 
   const notifiedCount = (db.prepare("SELECT COUNT(*) n FROM blast_radius WHERE incident_id=? AND notified_at IS NOT NULL").get(id) as { n: number }).n;
 
-  return { incident, suspicions, contributions, blastLines, isolationTree, events, proposals, notifiedCount };
+  // Every blast line (ids only) for the map: observed vs silent.
+  const blastAll = db.prepare("SELECT line_id, evidence FROM blast_radius WHERE incident_id=?").all(id) as {
+    line_id: string;
+    evidence: "observed" | "inferred";
+  }[];
+  const blastMap = {
+    observed: blastAll.filter((b) => b.evidence === "observed").map((b) => b.line_id),
+    inferred: blastAll.filter((b) => b.evidence === "inferred").map((b) => b.line_id),
+  };
+
+  return { incident, suspicions, contributions, blastLines, blastMap, isolationTree, events, proposals, notifiedCount };
 }
 
 function buildIsolationTree(id: string, suspect: string | null, suspicions: SuspicionOut[]): TreeNode[] {

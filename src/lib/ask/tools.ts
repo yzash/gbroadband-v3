@@ -87,12 +87,12 @@ export function draft_proposal(id: string, kind: "notification" | "dispatch"): {
     const window = eta >= 1 ? `${eta.toFixed(1)} hours` : `${Math.round(eta * 60)} minutes`;
     const msg = `We've detected an issue affecting your area and our team is already on it. We estimate service will be restored within ~${window}. We'll let you know the moment it's fixed. — Globe Broadband`;
     return {
-      text: `Draft customer notification for **${id}** (${(inc0.observed_count as number) + (inc0.inferred_count as number)} recipients). *Draft only — approve in Proposals & Audit to send.*`,
+      text: `Draft customer notification for **${id}** (${(inc0.observed_count as number) + (inc0.inferred_count as number)} recipients). *Draft only — approve in Approvals & Audit to send.*`,
       card: { type: "notification", incident: id, recipients: (inc0.observed_count as number) + (inc0.inferred_count as number), message: msg, eta_hrs: eta },
     };
   }
   return {
-    text: `Draft dispatch for **${id}** to ${inc0.top_suspect}. *Draft only — approve in Proposals & Audit to execute.*`,
+    text: `Draft dispatch for **${id}** to ${inc0.top_suspect}. *Draft only — approve in Approvals & Audit to execute.*`,
     card: { type: "dispatch", incident: id, target: inc0.top_suspect, vendor: (inc0 as { vendor_name?: string }).vendor_name ?? inc0.vendor_id },
   };
 }

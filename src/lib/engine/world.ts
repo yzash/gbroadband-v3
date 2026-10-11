@@ -130,14 +130,30 @@ function rand(lineId: string): number {
   return ((h >>> 0) % 1000) / 1000;
 }
 
-/** Update churn hazard: rises with unrepaired offline hours. */
-export function updateChurnHazard(db: DB, simMin: number): void {
+/**
+ * Churn hazard while a line is down rises with unrepaired hours. Proactive
+ * notification slows that build-up (~45%), and a credit knocks it back. The
+ * 10% holdout never receives either — it is the control group for the lift
+ * measured on the Learn screen. Once a line recovers the risk decays slowly
+ * (per sim-hour), so the treatment effect stays measurable.
+ */
+export function updateChurnHazard(db: DB, simMin: number, minutes = 1): void {
   db.prepare(
     `UPDATE subscribers
-       SET churn_hazard = MIN(0.95, ROUND(
-         (SELECT CASE WHEN l.offline_since IS NOT NULL
-                      THEN 0.02 + (? - l.offline_since)/60.0 * 0.03
-                      ELSE MAX(0, churn_hazard - 0.01) END
-            FROM lines l WHERE l.line_id = subscribers.line_id), 3))`
-  ).run(simMin);
+        SET churn_hazard = MIN(0.95, MAX(0, ROUND(
+          (SELECT CASE WHEN l.offline_since IS NOT NULL
+                  THEN 0.02 + (@simMin - l.offline_since) / 60.0 * 0.03
+                         * (CASE WHEN subscribers.holdout = 0 AND subscribers.line_id IN
+                                   (SELECT line_id FROM blast_radius WHERE notified_at IS NOT NULL)
+                                 THEN 0.55 ELSE 1.0 END)
+                       - (CASE WHEN subscribers.holdout = 0 AND subscribers.line_id IN
+                                   (SELECT b.line_id FROM blast_radius b JOIN notifications n
+                                      ON n.incident_id = b.incident_id AND n.followup_kind = 'credit')
+                                 THEN 0.12 ELSE 0 END)
+                  ELSE subscribers.churn_hazard - 0.005 * @minutes / 60.0 END
+             FROM lines l WHERE l.line_id = subscribers.line_id), 3)))`
+  ).run({ simMin, minutes });
+  // Lift is measured on the peak risk an outage caused — current hazard decays
+  // toward zero after repair, which makes a ratio of current values unstable.
+  db.prepare("UPDATE subscribers SET churn_peak = churn_hazard WHERE churn_hazard > churn_peak").run();
 }

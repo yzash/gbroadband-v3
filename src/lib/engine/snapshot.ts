@@ -2,7 +2,7 @@ import type { DB } from "../db";
 import { getSimState } from "../db";
 import type { Health } from "../tokens";
 import { healthFromRatio } from "../tokens";
-import type { OpsSnapshot, IncidentSummary, TickerEntry, CrewGlyph } from "../types";
+import type { OpsSnapshot, IncidentSummary, TickerEntry, CrewGlyph, CityStat } from "../types";
 import type { TopoIndex } from "./topo-index";
 import type { ImpactState } from "./world";
 
@@ -81,6 +81,45 @@ export function buildSnapshot(
     if (ratio > 0.02) element_health[node.id] = healthFromRatio(ratio);
   }
 
+  // Per-city rollups for the map choropleth.
+  const cityOfDistrict = new Map(
+    (db.prepare("SELECT id, city FROM districts").all() as { id: string; city: string }[]).map((d) => [d.id, d.city])
+  );
+  const arpuByLine = new Map(
+    (db.prepare("SELECT line_id, arpu FROM subscribers").all() as { line_id: string; arpu: number }[]).map((r) => [r.line_id, r.arpu])
+  );
+  const confByDistrict = new Map(
+    (db
+      .prepare("SELECT district_id, AVG(record_confidence) c, COUNT(*) n FROM topology_recorded WHERE kind='ont' GROUP BY district_id")
+      .all() as { district_id: string; c: number; n: number }[]).map((r) => [r.district_id, r])
+  );
+  const city_stats: Record<string, CityStat> = {};
+  const confAcc = new Map<string, { sum: number; n: number }>();
+  for (const lineId of topo.allLines) {
+    const district = topo.node(lineId)?.district;
+    const city = district ? cityOfDistrict.get(district) : undefined;
+    if (!city) continue;
+    const cs = (city_stats[city] ??= { lines: 0, impacted: 0, offline: 0, sensed: 0, tickets: 0, peso_at_risk: 0, record_conf: 1 });
+    cs.lines++;
+    const imp = impacted.get(lineId);
+    if (imp) {
+      cs.impacted++;
+      if (imp.status === "offline") cs.offline++;
+      cs.peso_at_risk += arpuByLine.get(lineId) ?? 0;
+    }
+    if (polledSet.has(lineId)) cs.sensed++;
+    if (ticketedLines.has(lineId)) cs.tickets++;
+  }
+  for (const [district, r] of confByDistrict) {
+    const city = cityOfDistrict.get(district);
+    if (!city) continue;
+    const acc = confAcc.get(city) ?? { sum: 0, n: 0 };
+    acc.sum += r.c * r.n;
+    acc.n += r.n;
+    confAcc.set(city, acc);
+  }
+  for (const [city, acc] of confAcc) if (city_stats[city]) city_stats[city].record_conf = acc.n ? acc.sum / acc.n : 1;
+
   // Incidents (M3+ populate; empty until then).
   const incidents = db
     .prepare(
@@ -124,9 +163,42 @@ export function buildSnapshot(
     ticket_flow.push({ t: Math.max(0, hourStart), opened, deflected: 0, resolved });
   }
 
-  const crews = db
-    .prepare("SELECT id as job_id, vendor_id, grid_x, grid_y, state, incident_id FROM crew_jobs WHERE state != 'done'")
-    .all() as CrewGlyph[];
+  // Crews drive from their exchange (the target's OLT) to the site: interpolate
+  // the live position by travel progress so the map shows them moving.
+  const crewRows = db
+    .prepare(
+      "SELECT id as job_id, vendor_id, grid_x, grid_y, state, incident_id, target_element, lat, lon, dispatched_at, arrived_at FROM crew_jobs WHERE state != 'done'"
+    )
+    .all() as (Omit<CrewGlyph, "from_lat" | "from_lon" | "to_lat" | "to_lon" | "progress" | "eta_min"> & {
+    dispatched_at: number;
+    arrived_at: number | null;
+  })[];
+  const crews: CrewGlyph[] = crewRows.map((c) => {
+    const oltId = [c.target_element, ...topo.ancestors(c.target_element)].find((id) => topo.node(id)?.kind === "olt");
+    const from = oltId ? topo.node(oltId) : undefined;
+    const travel = Math.max(1, (c.arrived_at ?? c.dispatched_at) - c.dispatched_at);
+    const progress = c.state === "enroute" ? Math.min(1, Math.max(0, (sim.sim_min - c.dispatched_at) / travel)) : 1;
+    const fLat = from?.lat ?? c.lat;
+    const fLon = from?.lon ?? c.lon;
+    const lerp = (a: number | null, b: number | null) => (a === null || b === null ? b : a + (b - a) * progress);
+    return {
+      job_id: c.job_id,
+      vendor_id: c.vendor_id,
+      grid_x: c.grid_x,
+      grid_y: c.grid_y,
+      state: c.state,
+      incident_id: c.incident_id,
+      target_element: c.target_element,
+      lat: lerp(fLat, c.lat),
+      lon: lerp(fLon, c.lon),
+      from_lat: fLat,
+      from_lon: fLon,
+      to_lat: c.lat,
+      to_lon: c.lon,
+      progress,
+      eta_min: c.state === "enroute" ? Math.max(0, (c.arrived_at ?? sim.sim_min) - sim.sim_min) : 0,
+    };
+  });
 
   // MTTR histogram (today's resolved repairs) vs the repair-window threshold.
   const bins: [number, number][] = [
@@ -168,10 +240,12 @@ export function buildSnapshot(
     },
     incidents: incidents.map(rowToIncident),
     ticker,
-    crews: crews.map((c) => ({ ...c, state: c.state as CrewGlyph["state"] })),
+    crews,
     ticket_flow,
     mttr_hist,
     element_health,
+    city_stats,
+    ticketed_lines: [...ticketedLines],
     sensing_health: {
       coverage: sim.sensing_coverage,
       alarm_delay_min: sim.alarm_delay_min,

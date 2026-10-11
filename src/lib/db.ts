@@ -26,9 +26,26 @@ export function getDb(): DB {
   return db;
 }
 
+/**
+ * Bump when a table's shape changes. A database written by an older schema
+ * (e.g. on Render's persistent disk) is dropped and rebuilt — the world is
+ * synthetic and re-seeds deterministically, so nothing of value is lost.
+ */
+const SCHEMA_VERSION = 2; // v2: real lat/lon geography
+
 export function applySchema(db: DB): void {
+  const current = db.pragma("user_version", { simple: true }) as number;
+  if (current !== SCHEMA_VERSION) {
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .all() as { name: string }[];
+    db.transaction(() => {
+      for (const { name } of tables) db.exec(`DROP TABLE IF EXISTS "${name}"`);
+    })();
+  }
   const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
   db.exec(schema);
+  db.pragma(`user_version = ${SCHEMA_VERSION}`);
 }
 
 /** Full wipe of all data tables (keeps schema). Used by Reset + reseed. */

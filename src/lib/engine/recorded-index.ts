@@ -8,6 +8,8 @@ interface RecNode {
   district: string | null;
   confidence: number;
   mismapped: boolean;
+  lat: number | null;
+  lon: number | null;
   grid_x: number | null;
   grid_y: number | null;
 }
@@ -26,7 +28,7 @@ export class RecordedIndex {
   constructor(db: DB) {
     const rows = db
       .prepare(
-        "SELECT element_id, kind, parent_id_recorded, district_id, record_confidence, mismapped, grid_x, grid_y FROM topology_recorded"
+        "SELECT element_id, kind, parent_id_recorded, district_id, record_confidence, mismapped, lat, lon, grid_x, grid_y FROM topology_recorded"
       )
       .all() as {
       element_id: string;
@@ -35,6 +37,8 @@ export class RecordedIndex {
       district_id: string | null;
       record_confidence: number;
       mismapped: number;
+      lat: number | null;
+      lon: number | null;
       grid_x: number | null;
       grid_y: number | null;
     }[];
@@ -46,6 +50,8 @@ export class RecordedIndex {
         district: r.district_id,
         confidence: r.record_confidence,
         mismapped: r.mismapped === 1,
+        lat: r.lat,
+        lon: r.lon,
         grid_x: r.grid_x,
         grid_y: r.grid_y,
       });

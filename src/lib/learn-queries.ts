@@ -16,18 +16,24 @@ export function getLearnMetrics() {
   const distinctIncidents = n("SELECT COUNT(DISTINCT parent_incident_id) n FROM tickets WHERE parent_incident_id IS NOT NULL");
   const dupMerged = Math.max(0, ticketsLinked - distinctIncidents);
 
-  // Retention lift vs the 10% holdout (churn hazard among impacted subscribers).
-  const avgHaz = (holdout: number) =>
-    (db
-      .prepare(
-        `SELECT COALESCE(AVG(s.churn_hazard),0) a
-           FROM subscribers s
-          WHERE s.holdout=? AND s.line_id IN (SELECT DISTINCT line_id FROM blast_radius)`
-      )
-      .get(holdout) as { a: number }).a;
-  const holdoutHaz = avgHaz(1);
-  const treatedHaz = avgHaz(0);
-  const lift = holdoutHaz > 0 ? (holdoutHaz - treatedHaz) / holdoutHaz : 0;
+  // Retention lift vs the 10% holdout, measured like an experiment: within the
+  // incidents that received a proactive notification, compare the peak churn risk of
+  // notified customers against held-out customers who got nothing.
+  const avg = (sql: string) => db.prepare(sql).get() as { a: number | null; n: number };
+  const treated = avg(
+    `SELECT AVG(s.churn_peak) a, COUNT(*) n FROM subscribers s
+      WHERE s.holdout = 0 AND s.line_id IN (SELECT line_id FROM blast_radius WHERE notified_at IS NOT NULL)`
+  );
+  const control = avg(
+    `SELECT AVG(s.churn_peak) a, COUNT(*) n FROM subscribers s
+      WHERE s.holdout = 1 AND s.line_id IN (
+        SELECT b.line_id FROM blast_radius b
+         WHERE b.incident_id IN (SELECT DISTINCT incident_id FROM blast_radius WHERE notified_at IS NOT NULL))`
+  );
+  const measurable = treated.n > 0 && control.n > 0 && (control.a ?? 0) > 0;
+  const holdoutHaz = control.a ?? 0;
+  const treatedHaz = treated.a ?? 0;
+  const lift = measurable ? (holdoutHaz - treatedHaz) / holdoutHaz : null;
 
   const corrections = db
     .prepare("SELECT id, line_id, from_parent, to_parent, status, incident_id, sim_ts FROM record_corrections ORDER BY (status='suggested') DESC, sim_ts DESC LIMIT 40")
@@ -52,7 +58,7 @@ export function getLearnMetrics() {
     repairsInWindow,
     repairsInWindowPct: repairsTotal > 0 ? repairsInWindow / repairsTotal : 0,
     dupMerged,
-    retention: { holdoutHaz, treatedHaz, lift },
+    retention: { holdoutHaz, treatedHaz, lift, treatedN: treated.n, controlN: control.n },
     corrections,
     correctionsAccepted,
     correctionsSuggested,

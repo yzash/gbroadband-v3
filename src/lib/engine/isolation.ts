@@ -1,4 +1,5 @@
 import type { DB } from "../db";
+import { haversineKm } from "../geo";
 import type { TopoIndex } from "./topo-index";
 import type { RecordedIndex } from "./recorded-index";
 import type { SensingSets } from "./world";
@@ -208,16 +209,17 @@ function persistSuspicions(db: DB, incidentId: string, ranked: Candidate[], rec:
 
 function confirmingTest(top: Candidate, topo: TopoIndex, rec: RecordedIndex): string {
   const el = top.element;
-  const truth = topo.node(el);
-  const olt = [el, ...topo.ancestors(el)].find((id) => topo.node(id)?.kind === "olt");
-  const pon = [el, ...topo.ancestors(el)].find((id) => topo.node(id)?.kind === "pon");
-  const oltNode = olt ? topo.node(olt) : undefined;
+  const olt = [el, ...rec.ancestors(el)].find((id) => rec.node(id)?.kind === "olt");
+  const pon = [el, ...rec.ancestors(el)].find((id) => rec.node(id)?.kind === "pon");
+  // Estimate from plant-record locations (the platform's view), with a 1.4x
+  // routing factor: cable follows streets, not the straight line.
+  const a = olt ? rec.node(olt) : undefined;
+  const b = rec.node(el);
   let dist = 1.2;
-  if (oltNode?.grid_x != null && truth?.grid_x != null) {
-    const dx = (truth.grid_x ?? 0) - (oltNode.grid_x ?? 0);
-    const dy = (truth.grid_y ?? 0) - (oltNode.grid_y ?? 0);
-    dist = Math.max(0.3, Math.round((Math.sqrt(dx * dx + dy * dy) / 45) * 10) / 10);
+  if (a?.lat != null && a.lon != null && b?.lat != null && b.lon != null) {
+    dist = Math.max(0.3, Math.round(haversineKm(a.lat, a.lon, b.lat, b.lon) * 1.4 * 10) / 10);
   }
+  void topo;
   switch (top.kind) {
     case "splitter":
       return `OTDR from ${olt ?? "OLT"} ${pon ? "· " + pon : ""} → expected break ~${dist} km`;

@@ -6,6 +6,8 @@ interface Node {
   kind: ElementKind;
   parent: string | null;
   district: string | null;
+  lat: number | null;
+  lon: number | null;
   grid_x: number | null;
   grid_y: number | null;
 }
@@ -24,12 +26,14 @@ export class TopoIndex {
 
   constructor(db: DB) {
     const rows = db
-      .prepare("SELECT element_id, kind, parent_id, district_id, grid_x, grid_y FROM topology_truth")
+      .prepare("SELECT element_id, kind, parent_id, district_id, lat, lon, grid_x, grid_y FROM topology_truth")
       .all() as {
       element_id: string;
       kind: ElementKind;
       parent_id: string | null;
       district_id: string | null;
+      lat: number | null;
+      lon: number | null;
       grid_x: number | null;
       grid_y: number | null;
     }[];
@@ -40,6 +44,8 @@ export class TopoIndex {
         kind: r.kind,
         parent: r.parent_id,
         district: r.district_id,
+        lat: r.lat,
+        lon: r.lon,
         grid_x: r.grid_x,
         grid_y: r.grid_y,
       });

@@ -165,10 +165,14 @@ export function generateProposals(db: DB, topo: TopoIndex): void {
     if (!exists(hasProposal, inc.id, "notification")) {
       const total = inc.observed_count + inc.inferred_count;
       const cause = causeText(inc.fault_kind);
+      const heldOut = (db
+        .prepare("SELECT COUNT(*) n FROM blast_radius b JOIN subscribers s ON s.line_id=b.line_id WHERE b.incident_id=? AND s.holdout=1")
+        .get(inc.id) as { n: number }).n;
+      const recipients = Math.max(0, total - heldOut);
       create(db, inc.id, "notification", inc.top_suspect, inc.vendor_id, sim.sim_min, {
         title: "Proactive customer notification",
-        detail: `Notify ${total} affected customers — including the ${inc.inferred_count} who haven't called.`,
-        recipients: total,
+        detail: `Notify ${recipients} affected customers — including the silent ones who haven't called.${heldOut ? ` ${heldOut} held out as the control group.` : ""}`,
+        recipients,
         cause,
         etaHrs: inc.eta_hrs ?? inc.predicted_mttr_p50,
         messagePreview: notificationMessage(cause, inc.eta_hrs ?? inc.predicted_mttr_p50),
@@ -344,8 +348,8 @@ function executeProposal(
       const arrival = simMin + travelMin;
       const done = arrival + Math.round(repairHrs * 60);
       db.prepare(
-        "INSERT INTO crew_jobs (id, proposal_id, incident_id, vendor_id, target_element, grid_x, grid_y, state, dispatched_at, arrived_at, done_at) VALUES (?,?,?,?,?,?,?,'enroute',?,?,?)"
-      ).run(newCrewId(), p.id, p.incident_id, p.vendor_id, p.target_element, node?.grid_x ?? null, node?.grid_y ?? null, simMin, arrival, done);
+        "INSERT INTO crew_jobs (id, proposal_id, incident_id, vendor_id, target_element, lat, lon, grid_x, grid_y, state, dispatched_at, arrived_at, done_at) VALUES (?,?,?,?,?,?,?,?,?,'enroute',?,?,?)"
+      ).run(newCrewId(), p.id, p.incident_id, p.vendor_id, p.target_element, node?.lat ?? null, node?.lon ?? null, node?.grid_x ?? null, node?.grid_y ?? null, simMin, arrival, done);
       db.prepare("UPDATE incidents SET state='repairing' WHERE id=?").run(p.incident_id);
       logEvent(db, simMin, "dispatch", `Crew dispatched to ${p.target_element} (${payload.vendorName ?? p.vendor_id}) · parts: ${payload.partsHint}`, `/incidents?id=${p.incident_id}`, role.toUpperCase());
       break;
@@ -355,7 +359,10 @@ function executeProposal(
       db.prepare(
         "INSERT INTO notifications (id, incident_id, proposal_id, lines_count, message_template, eta_given_hrs, sent_at, followup_kind) VALUES (?,?,?,?,?,?,?,?)"
       ).run(`NOTIF-${p.id}`, p.incident_id, p.id, recipients, String(payload.messagePreview ?? ""), (payload.etaHrs as number) ?? null, simMin, "progress");
-      db.prepare("UPDATE blast_radius SET notified_at=? WHERE incident_id=? AND notified_at IS NULL").run(simMin, p.incident_id);
+      // The 10% holdout is the control group: never proactively notified.
+      db.prepare(
+        "UPDATE blast_radius SET notified_at=? WHERE incident_id=? AND notified_at IS NULL AND line_id NOT IN (SELECT line_id FROM subscribers WHERE holdout=1)"
+      ).run(simMin, p.incident_id);
       logEvent(db, simMin, "notify", `Notified ${recipients} customers · cause + ETA sent (${p.incident_id})`, `/incidents?id=${p.incident_id}`, role.toUpperCase());
       break;
     }
@@ -366,7 +373,7 @@ function executeProposal(
       // Credits reduce churn hazard on affected subscribers.
       db.prepare(
         `UPDATE subscribers SET churn_hazard = MAX(0, churn_hazard - 0.15)
-          WHERE line_id IN (SELECT line_id FROM blast_radius WHERE incident_id=?)`
+          WHERE holdout = 0 AND line_id IN (SELECT line_id FROM blast_radius WHERE incident_id=?)`
       ).run(p.incident_id);
       logEvent(db, simMin, "credit", `Credits issued for past-window lines (${p.incident_id})`, `/incidents?id=${p.incident_id}`, role.toUpperCase());
       break;

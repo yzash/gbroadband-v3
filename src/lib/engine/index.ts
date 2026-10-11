@@ -68,12 +68,16 @@ function core(): EngineCore {
       lastJson: "",
       booted: false,
     };
+    // Boot on construction, whichever entry point (instrumentation hook, an API
+    // route, SSE) reaches the engine first. Skipping this after a restart left
+    // line impact empty and restarted the ID counters (FLT-/INC-/PROP-), which
+    // collide with rows already in the database.
+    boot(g.__sdal_engine);
   }
   return g.__sdal_engine;
 }
 
-export function bootEngine(): void {
-  const c = core();
+function boot(c: EngineCore): void {
   if (c.booted) return;
   c.booted = true;
   resetFaultSeq(c.db);
@@ -85,6 +89,10 @@ export function bootEngine(): void {
   publish();
   const sim = getSimState(c.db)!;
   if (sim.running && sim.speed > 0) startTimer();
+}
+
+export function bootEngine(): void {
+  core(); // construction boots the engine
 }
 
 function startTimer(): void {
@@ -144,7 +152,7 @@ function stepWorld(minutes: number): void {
   if (recovered.length) closeTicketsForRecovered(db, simMin, recovered);
   const tk = ticketingPass(db, c.rng, simMin, minutes, next);
   if (tk.deflected > 0) bumpLearn(db, Math.floor(simMin / 1440), "calls_deflected", tk.deflected);
-  updateChurnHazard(db, simMin);
+  updateChurnHazard(db, simMin, minutes);
 
   // Detection (M3) → isolation + scoping (M4) → MTTR + prioritization (M5) → action ladder (M6).
   runDetection(db, c.topo, c.rec, sensing, simMin);

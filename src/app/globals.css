@@ -1,61 +1,138 @@
+/* Self-hosted fonts (no runtime call to Google; no build-time network fetch). */
+@import "@fontsource/source-sans-3/400.css";
+@import "@fontsource/source-sans-3/500.css";
+@import "@fontsource/source-sans-3/600.css";
+@import "@fontsource/source-sans-3/700.css";
+@import "@fontsource/montserrat/600.css";
+@import "@fontsource/montserrat/700.css";
+@import "@fontsource/montserrat/800.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
 }
 
 html,
 body {
-  background: #0b0f17;
-  color: #e8edf7;
+  background: #050b1d; /* BRAND.canvas */
+  color: #eef3ff; /* BRAND.ink */
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3854 transparent;
+  scrollbar-color: #2a3d70 transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2b3854;
+  background: #2a3d70;
   border-radius: 8px;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Every number lines up. */
+.tnum,
+td,
+th {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid #3cb7ff; /* BRAND.globeSky */
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* MapLibre controls, restyled to the command-centre canvas. */
+.maplibregl-ctrl-group {
+  background: #0a1430 !important;
+  border: 1px solid #2a3d70 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 6, 24, 0.5) !important;
+}
+.maplibregl-ctrl-group button {
+  width: 30px !important;
+  height: 30px !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid #1d2c56 !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(0.85) hue-rotate(180deg);
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(5, 11, 29, 0.72) !important;
+  color: #7586ae !important;
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #afbcdb !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: invert(0.8);
 }
 
 @layer components {
   .card {
-    @apply rounded-card bg-surface border border-line shadow-card;
+    @apply rounded-card border border-line bg-surface shadow-card;
   }
   .card-2 {
-    @apply rounded-card bg-surface-2 border border-line;
+    @apply rounded-card border border-line bg-surface-2;
+  }
+  .glass {
+    @apply rounded-card border border-line-2/70 bg-surface/85 shadow-float backdrop-blur-md;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium uppercase tracking-wide;
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide;
   }
   .btn {
-    @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-primary {
-    @apply btn bg-doctrine text-white hover:bg-doctrine/85;
+    @apply btn bg-doctrine text-white hover:bg-[#4a7dff];
   }
   .btn-ghost {
-    @apply btn bg-surface-2 text-ink-2 hover:bg-surface-3 hover:text-ink border border-line;
+    @apply btn border border-line-2 bg-surface-2 text-ink-2 hover:border-globe-sky/40 hover:text-ink;
   }
   .btn-danger {
-    @apply btn bg-critical/15 text-critical hover:bg-critical/25 border border-critical/40;
+    @apply btn border border-critical/40 bg-critical/10 text-critical hover:bg-critical/20;
   }
   .kpi-label {
-    @apply text-2xs uppercase tracking-wider text-ink-3;
+    @apply text-2xs font-semibold uppercase tracking-wider text-ink-3;
   }
   .kpi-value {
-    @apply text-2xl font-semibold tabular-nums text-ink;
+    @apply font-display text-2xl font-bold tabular-nums text-ink;
   }
   .section-title {
-    @apply text-xs font-semibold uppercase tracking-wider text-ink-3;
+    @apply text-2xs font-bold uppercase tracking-[0.12em] text-ink-3;
   }
 }

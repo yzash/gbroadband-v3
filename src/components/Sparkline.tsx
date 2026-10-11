@@ -3,7 +3,7 @@
 /** Minimal inline-SVG sparkline. Cheap enough to render many per screen. */
 export function Sparkline({
   values,
-  color = "#4c8dff",
+  color = "#2F6BFF",
   height = 28,
   width = 120,
   fill = false,

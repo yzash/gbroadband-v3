@@ -58,21 +58,22 @@ export function seedWorld(db: DB = getDb()): SeedResult {
 
     // ---- districts ----
     const insDistrict = db.prepare(
-      `INSERT INTO districts (id, name, grid_x, grid_y, area_class, power_grid) VALUES (?,?,?,?,?,?)`
+      `INSERT INTO districts (id, name, city, lat, lon, grid_x, grid_y, area_class, power_grid) VALUES (?,?,?,?,?,?,?,?,?)`
     );
-    for (const d of world.districts) insDistrict.run(d.id, d.name, d.grid_x, d.grid_y, d.area_class, d.power_grid);
+    for (const d of world.districts)
+      insDistrict.run(d.id, d.name, d.city, d.lat, d.lon, d.grid_x, d.grid_y, d.area_class, d.power_grid);
     const areaByDistrict = new Map(world.districts.map((d) => [d.id, d.area_class]));
 
     // ---- topology (truth + recorded) ----
     const insTruth = db.prepare(
-      `INSERT INTO topology_truth (element_id, kind, parent_id, grid_x, grid_y, district_id, label, split_ratio, tier)
-       VALUES (@element_id,@kind,@parent_id,@grid_x,@grid_y,@district_id,@label,@split_ratio,@tier)`
+      `INSERT INTO topology_truth (element_id, kind, parent_id, lat, lon, grid_x, grid_y, district_id, label, split_ratio, tier)
+       VALUES (@element_id,@kind,@parent_id,@lat,@lon,@grid_x,@grid_y,@district_id,@label,@split_ratio,@tier)`
     );
     for (const e of world.truth) insTruth.run(e);
 
     const insRec = db.prepare(
-      `INSERT INTO topology_recorded (element_id, kind, parent_id_recorded, grid_x, grid_y, district_id, record_confidence, mismapped)
-       VALUES (@element_id,@kind,@parent_id_recorded,@grid_x,@grid_y,@district_id,@record_confidence,@mismapped)`
+      `INSERT INTO topology_recorded (element_id, kind, parent_id_recorded, lat, lon, grid_x, grid_y, district_id, record_confidence, mismapped)
+       VALUES (@element_id,@kind,@parent_id_recorded,@lat,@lon,@grid_x,@grid_y,@district_id,@record_confidence,@mismapped)`
     );
     for (const r of world.recorded) insRec.run(r);
 
