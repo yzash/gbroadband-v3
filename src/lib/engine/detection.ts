@@ -51,6 +51,7 @@ export function runDetection(
         db.prepare(
           "INSERT INTO notifications (id, incident_id, proposal_id, lines_count, message_template, eta_given_hrs, sent_at, followup_kind, before_call) VALUES (?,?,NULL,?,?,NULL,?,'closure',0) ON CONFLICT(id) DO NOTHING"
         ).run(`CLOSE-${inc.id}`, inc.id, told, "Good news — your internet service has been restored. Thank you for your patience. — Globe Broadband", simMin);
+        db.prepare("INSERT INTO events (sim_ts, kind, text, href, source) VALUES (?,?,?,?,?)").run(simMin, "notify", `"Service restored" message sent to ${told} customer${told === 1 ? "" : "s"} (${inc.id})`, `/incidents?id=${inc.id}`, "CX");
       }
     }
   }
