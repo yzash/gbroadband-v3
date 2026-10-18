@@ -106,7 +106,7 @@ export const PERSONAS: Persona[] = [
   {
     role: "partner",
     name: "Dante Villanueva",
-    title: "Crew Lead · Southgrid Splice",
+    title: "Crew Lead · Northline Fiber",
     team: "Last-mile Partner",
     group: "Last-mile Partner",
     initials: "DV",

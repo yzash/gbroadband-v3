@@ -255,7 +255,8 @@ export function getCallerAnswer(lineOrSub: string): CallerAnswer | null {
   }
 
   const creditEligible = !!br && br.hours_down > sim.repair_window_hrs;
-  const first = s.name.split(" ")[0];
+  // Residential callers by first name; business accounts by company.
+  const first = s.b2b ? `${s.name} team` : s.name.split(" ")[0];
   const etaTxt = incident?.etaHrs ? (incident.etaHrs >= 1 ? `about ${incident.etaHrs.toFixed(1)} hours` : `about ${Math.max(10, Math.round(incident.etaHrs * 60))} minutes`) : "shortly";
   let script: string;
   const guidance: string[] = [];

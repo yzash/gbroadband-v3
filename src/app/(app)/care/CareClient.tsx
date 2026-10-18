@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Ban, BadgeCheck, Building2, Crown, Headset, Search, Truck, Wrench } from "lucide-react";
+import { Ban, BadgeCheck, Building2, Clock, Crown, Headset, Search, Truck, Wrench } from "lucide-react";
 import { ApprovalQueue, Section, SimTime, Tile, pctTxt, useLive, useOutcomes, type PendingRow } from "@/components/persona/kit";
 import { FAULT_LABEL, type FaultKind } from "@/lib/types";
 import { fmtHrs, peso } from "@/lib/tokens";
@@ -139,7 +139,7 @@ function AnswerCard({ a }: { a: CallerAnswer }) {
             {s.vip && <span className="chip bg-watch/15 text-watch"><Crown size={11} /> VIP</span>}
           </div>
           <div className="text-[12px] text-ink-3">
-            <span className="font-mono">{s.line_id}</span> · {s.district}, {s.city} · {peso(s.arpu)}/mo · {Math.round(s.tenure_days / 365)} yrs with Globe
+            <span className="font-mono">{s.line_id}</span> · {s.district}, {s.city} · {peso(s.arpu)}/mo · {s.tenure_days >= 365 ? `${Math.round(s.tenure_days / 365)} yrs` : `${Math.max(1, Math.round(s.tenure_days / 30))} months`} with Globe
           </div>
         </div>
         <span className={`chip ${tone}`}>{a.status}{a.downHrs > 0 ? ` · ${fmtHrs(a.downHrs)}` : ""}</span>
@@ -181,7 +181,13 @@ function AnswerCard({ a }: { a: CallerAnswer }) {
           <ul className="flex flex-col gap-1.5">
             {a.guidance.map((g) => (
               <li key={g} className="flex items-start gap-2 text-[12.5px] text-ink-2">
-                {g.startsWith("Network-side") ? <Ban size={14} className="mt-0.5 shrink-0 text-critical" /> : <BadgeCheck size={14} className="mt-0.5 shrink-0 text-healthy" />}
+                {g.startsWith("Network-side") ? (
+                  <Ban size={14} className="mt-0.5 shrink-0 text-critical" />
+                ) : g.startsWith("Not yet") || g.startsWith("Past the") ? (
+                  <Clock size={14} className="mt-0.5 shrink-0 text-watch" />
+                ) : (
+                  <BadgeCheck size={14} className="mt-0.5 shrink-0 text-healthy" />
+                )}
                 {g}
               </li>
             ))}
