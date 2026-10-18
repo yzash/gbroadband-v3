@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FastForward, Pause, Play, RotateCcw } from "lucide-react";
+import { Captions as CaptionsIcon, FastForward, Pause, Play, RotateCcw } from "lucide-react";
 import { useApp } from "./AppState";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { fmtSimTime } from "@/lib/tokens";
@@ -26,7 +26,7 @@ export function BrandMark() {
 }
 
 export function TopBar() {
-  const { snapshot, connected, setClock, reset } = useApp();
+  const { snapshot, connected, setClock, reset, captions, setCaptions } = useApp();
   const sim = snapshot?.sim;
   const running = !!sim?.running && (sim?.speed ?? 0) > 0;
   const speed = sim?.speed ?? 0;
@@ -38,7 +38,7 @@ export function TopBar() {
         <div className="leading-none">
           <div className="font-display text-[17px] font-extrabold tracking-tight text-ink">Globe</div>
           <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
-            Network Assurance <span className="text-globe-sky">· SDAL</span>
+            Network Assurance <span className="text-globe-sky">· SDAL framework</span>
           </div>
         </div>
       </Link>
@@ -100,7 +100,19 @@ export function TopBar() {
         </button>
       </div>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={() => setCaptions(!captions)}
+          aria-pressed={captions}
+          title="Presenter captions: keywords + live outcomes for recording"
+          className={[
+            "flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold",
+            captions ? "border-globe-sky/60 bg-globe/50 text-white" : "border-line bg-surface-2 text-ink-2 hover:text-ink",
+          ].join(" ")}
+          data-testid="captions-toggle"
+        >
+          <CaptionsIcon size={14} /> Captions
+        </button>
         <RoleSwitcher />
       </div>
     </header>

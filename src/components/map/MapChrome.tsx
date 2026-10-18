@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Eye, FileWarning, Layers, PhoneCall, Wallet } from "lucide-react";
+import { Activity, Eye, FileWarning, Layers, PhoneCall, Store, Wallet } from "lucide-react";
 import { LAYERS, type LayerMode } from "@/lib/map-layers";
 import { linesUnder, type GeoBundle } from "@/lib/geo-client";
 import { HEALTH_HEX, pct, peso, pesoCompact } from "@/lib/tokens";
@@ -13,6 +13,7 @@ const ICON: Record<LayerMode, typeof Activity> = {
   tickets: PhoneCall,
   revenue: Wallet,
   records: FileWarning,
+  market: Store,
 };
 
 export interface Overlays {
@@ -100,7 +101,10 @@ export function Legend({ layer }: { layer: LayerMode }) {
         Incident · sized by blast radius
       </span>
       <span className="flex items-center gap-1.5">
-        <i className="inline-block h-2.5 w-3.5 rounded-full" style={{ background: "#FFC542" }} /> Crew
+        <i className="inline-block h-2.5 w-3.5 rounded-full" style={{ background: "#FFC542" }} /> Partner crew
+      </span>
+      <span className="flex items-center gap-1.5">
+        <i className="inline-block h-2.5 w-3.5 rounded-full" style={{ background: "#3CB7FF" }} /> CFS visit
       </span>
     </div>
   );

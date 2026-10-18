@@ -36,7 +36,7 @@ export function getLearnMetrics() {
   const lift = measurable ? (holdoutHaz - treatedHaz) / holdoutHaz : null;
 
   const corrections = db
-    .prepare("SELECT id, line_id, from_parent, to_parent, status, incident_id, sim_ts FROM record_corrections ORDER BY (status='suggested') DESC, sim_ts DESC LIMIT 40")
+    .prepare("SELECT id, line_id, from_parent, to_parent, status, source, incident_id, sim_ts FROM record_corrections ORDER BY (status='suggested') DESC, sim_ts DESC LIMIT 40")
     .all() as Record<string, unknown>[];
   const correctionsAccepted = n("SELECT COUNT(*) n FROM record_corrections WHERE status='accepted'");
   const correctionsSuggested = n("SELECT COUNT(*) n FROM record_corrections WHERE status='suggested'");

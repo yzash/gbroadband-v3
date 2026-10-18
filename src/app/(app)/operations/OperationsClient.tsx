@@ -21,7 +21,7 @@ import { NetworkMap } from "@/components/map/NetworkMap";
 import { HoverCard, LayerPanel, Legend, type Overlays } from "@/components/map/MapChrome";
 import type { MapFocus, MapHover, MapSelection } from "@/components/map/NetworkMapGL";
 import { useGeo, linesUnder, locate, type GeoBundle } from "@/lib/geo-client";
-import type { LayerMode } from "@/lib/map-layers";
+import { LAYERS, type LayerMode } from "@/lib/map-layers";
 import { BRAND } from "@/lib/brand";
 import { HEALTH_HEX, fmtHrs, fmtSimTime, pct, peso, pesoCompact } from "@/lib/tokens";
 import { FAULT_LABEL, type IncidentSummary, type OpsSnapshot } from "@/lib/types";
@@ -32,6 +32,11 @@ export function OperationsClient() {
   const { snapshot } = useApp();
   const bundle = useGeo(snapshot?.sensing_health.coverage);
   const [layer, setLayer] = useState<LayerMode>("health");
+  // Deep link: /operations?lens=market opens straight on a lens (used from Sales / Marketing).
+  useEffect(() => {
+    const l = new URLSearchParams(window.location.search).get("lens");
+    if (l && LAYERS.some((d) => d.id === l)) setLayer(l as LayerMode);
+  }, []);
   const [overlays, setOverlays] = useState<Overlays>({ backbone: true, incidents: true, crews: true, heat: true });
   const [selected, setSelected] = useState<MapSelection | null>(null);
   const [hover, setHover] = useState<MapHover | null>(null);

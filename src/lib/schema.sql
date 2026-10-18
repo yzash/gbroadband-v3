@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS sim_state (
   alarm_delay_min   INTEGER NOT NULL DEFAULT 20,
   dead_olt          TEXT,                           -- OLT id whose alarm feed is down
   repair_window_hrs REAL    NOT NULL DEFAULT 6.0,
-  model_version     INTEGER NOT NULL DEFAULT 1
+  model_version     INTEGER NOT NULL DEFAULT 1,
+  record_conf_baseline REAL NOT NULL DEFAULT 0  -- avg ONT record confidence at seed (Learn: records improved)
 );
 
 -- ---- Districts (Metro Manila) ----
@@ -254,7 +255,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_inc ON tickets(parent_incident_id);
 CREATE TABLE IF NOT EXISTS proposals (
   id            TEXT PRIMARY KEY,
   incident_id   TEXT NOT NULL,
-  kind          TEXT NOT NULL,   -- remote_action | confirming_test | dispatch | notification | credit
+  kind          TEXT NOT NULL,   -- remote_action | confirming_test | dispatch | notification | credit | account_alert | home_visit | campaign_hold | retention_offer
   state         TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | rejected | executed
   payload_json  TEXT NOT NULL,
   target_element TEXT,
@@ -272,7 +273,8 @@ CREATE TABLE IF NOT EXISTS crew_jobs (
   id             TEXT PRIMARY KEY,
   proposal_id    TEXT,
   incident_id    TEXT NOT NULL,
-  vendor_id      TEXT NOT NULL,
+  vendor_id      TEXT NOT NULL,             -- partner vendor id, or 'CFS' for Globe home-visit technicians
+  crew_type      TEXT NOT NULL DEFAULT 'partner',  -- partner | cfs
   target_element TEXT NOT NULL,
   lat            REAL,
   lon            REAL,
@@ -283,7 +285,8 @@ CREATE TABLE IF NOT EXISTS crew_jobs (
   arrived_at     INTEGER,
   done_at        INTEGER,
   found_at_element TEXT,
-  correct        INTEGER
+  correct        INTEGER,
+  closeout_by    TEXT                       -- who submitted the close-out early (partner persona); NULL = partner app on completion
 );
 CREATE INDEX IF NOT EXISTS idx_crew_state ON crew_jobs(state);
 
@@ -306,7 +309,41 @@ CREATE TABLE IF NOT EXISTS notifications (
   message_template TEXT NOT NULL,
   eta_given_hrs    REAL,
   sent_at          INTEGER NOT NULL,
-  followup_kind    TEXT              -- progress | closure | credit
+  followup_kind    TEXT,             -- progress | closure | credit | account | offer
+  before_call      INTEGER NOT NULL DEFAULT 0  -- recipients who had not called yet when this went out
+);
+
+-- ---- Last-mile partner close-out reports (the field feedback loop) ----
+CREATE TABLE IF NOT EXISTS partner_reports (
+  id                 TEXT PRIMARY KEY,
+  job_id             TEXT NOT NULL,
+  incident_id        TEXT NOT NULL,
+  vendor_id          TEXT NOT NULL,
+  crew_type          TEXT NOT NULL,          -- partner | cfs
+  element_dispatched TEXT NOT NULL,
+  element_found      TEXT NOT NULL,
+  root_cause         TEXT NOT NULL,
+  action_taken       TEXT NOT NULL,
+  parts_used         TEXT,
+  first_time_fix     INTEGER NOT NULL,       -- fault was where SDAL sent them
+  on_time            INTEGER NOT NULL,       -- arrived within the promised travel time
+  minutes_onsite     INTEGER NOT NULL,
+  discrepancies      INTEGER NOT NULL DEFAULT 0, -- plant-record errors the crew reported
+  photos             INTEGER NOT NULL DEFAULT 0,
+  submitted_at       INTEGER NOT NULL,
+  submitted_via      TEXT NOT NULL           -- partner_app | partner_portal
+);
+CREATE INDEX IF NOT EXISTS idx_reports_vendor ON partner_reports(vendor_id);
+
+-- ---- Acquisition campaign holds (Brand & Marketing) ----
+CREATE TABLE IF NOT EXISTS campaign_holds (
+  id            TEXT PRIMARY KEY,
+  city          TEXT NOT NULL,
+  incident_id   TEXT,
+  held_at       INTEGER NOT NULL,
+  released_at   INTEGER,
+  spend_per_day REAL NOT NULL,              -- illustrative paid-acquisition spend paused (PHP/day)
+  approved_by   TEXT NOT NULL
 );
 
 -- ---- Plant-record corrections (Learn → topology) ----
@@ -315,7 +352,7 @@ CREATE TABLE IF NOT EXISTS record_corrections (
   line_id     TEXT NOT NULL,
   from_parent TEXT,
   to_parent   TEXT,
-  source      TEXT NOT NULL DEFAULT 'repair_finding',
+  source      TEXT NOT NULL DEFAULT 'repair_finding',  -- repair_finding | partner_closeout
   status      TEXT NOT NULL DEFAULT 'suggested',  -- suggested | accepted
   incident_id TEXT,
   sim_ts      INTEGER NOT NULL

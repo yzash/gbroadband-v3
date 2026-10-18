@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/components/AppState";
-import { canApprove, type ProposalKind } from "@/lib/roles";
+import { APPROVER, PROPOSAL_LABEL, canApprove, roleLabel, type ProposalKind } from "@/lib/roles";
+import { personaFor } from "@/lib/personas";
+import { PersonaAvatar } from "@/components/RoleSwitcher";
 import { fmtSimTime, pesoCompact } from "@/lib/tokens";
 
 interface Pending {
@@ -30,6 +32,9 @@ export function ProposalsClient() {
   const [pending, setPending] = useState<Pending[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [mine, setMine] = useState(false);
+  const me = personaFor(role);
+  const shown = mine ? pending.filter((p) => canApprove(role, p.kind)) : pending;
 
   const load = useCallback(async () => {
     try {
@@ -66,19 +71,30 @@ export function ProposalsClient() {
     <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-2">
       {/* Pending approvals */}
       <section>
-        <h3 className="section-title mb-2">Pending approvals · {pending.length}</h3>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="section-title">Pending approvals · {shown.length}</h3>
+          <div className="flex rounded-md border border-line bg-surface-2 p-0.5 text-[11.5px] font-semibold" role="tablist">
+            <button role="tab" aria-selected={!mine} onClick={() => setMine(false)} className={["rounded px-2 py-1", !mine ? "bg-globe text-white" : "text-ink-2"].join(" ")}>
+              All teams
+            </button>
+            <button role="tab" aria-selected={mine} onClick={() => setMine(true)} className={["rounded px-2 py-1", mine ? "bg-globe text-white" : "text-ink-2"].join(" ")}>
+              {me.name.split(" ")[0]}&rsquo;s queue
+            </button>
+          </div>
+        </div>
         <div className="flex flex-col gap-2">
-          {pending.length === 0 && <div className="card-2 p-4 text-sm text-ink-3">No proposals awaiting approval.</div>}
-          {pending.map((p) => {
+          {shown.length === 0 && <div className="card-2 p-4 text-sm text-ink-3">Nothing awaiting approval.</div>}
+          {shown.map((p) => {
             const payload = JSON.parse(p.payload_json) as Record<string, unknown>;
             const gated = canApprove(role, p.kind);
             const held = !!payload.held;
+            const owner = personaFor(APPROVER[p.kind]);
             return (
               <div key={p.id} className="card-2 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="chip bg-surface-3 text-ink-3">{p.kind.replace("_", " ")}</span>
+                      <span className="chip bg-globe/40 text-globe-sky">{PROPOSAL_LABEL[p.kind]}</span>
                       <Link href={`/incidents?id=${p.incident_id}`} className="font-mono text-xs text-doctrine hover:underline">
                         {p.incident_id}
                       </Link>
@@ -92,7 +108,7 @@ export function ProposalsClient() {
                     <button
                       className="btn-primary text-xs"
                       disabled={!gated || held || busy === p.id}
-                      title={held ? "held pending upstream fix" : !gated ? `${role} can't approve this` : ""}
+                      title={held ? "held pending upstream fix" : !gated ? `Owned by ${owner.name}` : ""}
                       onClick={() => decide(p.id, "approve")}
                     >
                       Approve
@@ -102,7 +118,10 @@ export function ProposalsClient() {
                     </button>
                   </div>
                 </div>
-                {!gated && <div className="mt-1 text-2xs text-watch">Requires a different role to approve.</div>}
+                <div className="mt-1.5 flex items-center gap-1.5 text-2xs text-ink-3">
+                  <PersonaAvatar p={owner} size={16} /> Owned by {owner.name} · {owner.title}
+                  {!gated && <span className="text-watch">— switch persona to approve</span>}
+                </div>
               </div>
             );
           })}
@@ -119,11 +138,11 @@ export function ProposalsClient() {
               return (
                 <li key={a.id} className="flex items-start gap-2 border-b border-line/40 px-2 py-1.5 text-2xs last:border-0">
                   <span className="font-mono text-ink-3">{fmtSimTime(a.sim_ts)}</span>
-                  <span className="chip bg-surface-3 text-ink-3">{a.actor_role}</span>
+                  <span className="chip bg-surface-3 text-ink-3">{roleLabel(a.actor_role)}</span>
                   <span className="text-ink-2">
                     <span className={a.action === "reject" ? "text-critical" : "text-healthy"}>{a.action}</span>{" "}
                     {a.entity_type} <span className="font-mono">{a.entity_id}</span>
-                    {detail?.kind ? ` · ${String(detail.kind).replace("_", " ")}` : ""}
+                    {detail?.kind ? ` · ${PROPOSAL_LABEL[detail.kind as ProposalKind] ?? String(detail.kind)}` : ""}
                     {detail?.target ? ` → ${detail.target}` : ""}
                   </span>
                 </li>

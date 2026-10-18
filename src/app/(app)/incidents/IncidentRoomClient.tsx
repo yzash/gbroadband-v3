@@ -8,6 +8,7 @@ import { IsolationTree } from "./IsolationTree";
 import { ActionLadder } from "./ActionLadder";
 import { LoopTrace } from "./LoopTrace";
 import { BlastMap } from "./BlastMap";
+import { HandoffStrip } from "./HandoffStrip";
 import { peso, pesoCompact, fmtHrs } from "@/lib/tokens";
 import type { SuspicionOut, TreeNode, BlastLineOut } from "@/lib/incident-queries";
 
@@ -293,6 +294,8 @@ function IncidentDetail({ detail, window, onChanged }: { detail: Detail; window:
           </div>
         </section>
       </div>
+
+      <HandoffStrip incidentId={inc.id} fault={(inc.fault_kind as string | null) ?? null} />
 
       {/* Action ladder + Loop Trace */}
       <ActionLadder incidentId={inc.id} detail={detail} window={window} onChanged={onChanged} />

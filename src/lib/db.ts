@@ -31,7 +31,7 @@ export function getDb(): DB {
  * (e.g. on Render's persistent disk) is dropped and rebuilt — the world is
  * synthetic and re-seeds deterministically, so nothing of value is lost.
  */
-const SCHEMA_VERSION = 2; // v2: real lat/lon geography
+const SCHEMA_VERSION = 3; // v2: real lat/lon geography · v3: personas (close-outs, campaign holds, CFS visits)
 
 export function applySchema(db: DB): void {
   const current = db.pragma("user_version", { simple: true }) as number;
@@ -73,6 +73,7 @@ export function getSimState(db: DB) {
         dead_olt: string | null;
         repair_window_hrs: number;
         model_version: number;
+        record_conf_baseline: number;
       }
     | undefined;
 }

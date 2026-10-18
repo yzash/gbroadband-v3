@@ -127,6 +127,8 @@ export interface TickerEntry {
 export interface CrewGlyph {
   job_id: string;
   vendor_id: string;
+  /** Last-mile partner crew, or a Globe CFS home-visit technician. */
+  crew_type: "partner" | "cfs";
   grid_x: number;
   grid_y: number;
   state: "enroute" | "onsite" | "done";
@@ -185,6 +187,9 @@ export interface CityStat {
   tickets: number; // open valid tickets
   peso_at_risk: number;
   record_conf: number; // mean plant-record confidence, 0..1
+  /** Brand & Marketing / Sales: is it safe to sell here right now? */
+  sell: "sell" | "care" | "hold";
+  campaign_hold: boolean;
 }
 
 export interface OpsSnapshot {

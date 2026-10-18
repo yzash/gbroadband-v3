@@ -2,13 +2,16 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import type { OpsSnapshot } from "@/lib/types";
-import type { Role } from "@/lib/roles";
+import { normalizeRole, type Role } from "@/lib/roles";
 
 interface AppStateValue {
   snapshot: OpsSnapshot | null;
   connected: boolean;
   role: Role;
   setRole: (r: Role) => void;
+  /** Presenter captions: keyword + live outcome subtitles for recording. */
+  captions: boolean;
+  setCaptions: (on: boolean) => void;
   /** POST a clock command; snapshot refreshes via stream. */
   setClock: (cmd: { speed?: 0 | 1 | 4 | 16; running?: boolean; advance6h?: boolean }) => Promise<void>;
   reset: () => Promise<void>;
@@ -27,18 +30,50 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [snapshot, setSnapshot] = useState<OpsSnapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [role, setRoleState] = useState<Role>("noc_lead");
+  const [captions, setCaptionsState] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   // Restore role from localStorage.
   useEffect(() => {
-    const saved = window.localStorage.getItem("sdal.role") as Role | null;
-    if (saved) setRoleState(saved);
+    try {
+      const saved = normalizeRole(window.localStorage.getItem("sdal.role"));
+      if (saved) setRoleState(saved);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+
+  // Captions: ?captions=1 (or 0) wins, else the last choice on this browser.
+  useEffect(() => {
+    try {
+      const qp = new URLSearchParams(window.location.search).get("captions");
+      if (qp !== null) {
+        setCaptionsState(qp === "1");
+        window.localStorage.setItem("sdal.captions", qp === "1" ? "1" : "0");
+      } else setCaptionsState(window.localStorage.getItem("sdal.captions") === "1");
+      const as = normalizeRole(new URLSearchParams(window.location.search).get("as"));
+      if (as) setRoleState(as);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const setCaptions = useCallback((on: boolean) => {
+    setCaptionsState(on);
+    try {
+      window.localStorage.setItem("sdal.captions", on ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
   }, []);
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
-    window.localStorage.setItem("sdal.role", r);
+    try {
+      window.localStorage.setItem("sdal.role", r);
+    } catch {
+      /* storage unavailable */
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -121,7 +156,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ snapshot, connected, role, setRole, setClock, reset, refresh }}>
+    <Ctx.Provider value={{ snapshot, connected, role, setRole, captions, setCaptions, setClock, reset, refresh }}>
       {children}
     </Ctx.Provider>
   );

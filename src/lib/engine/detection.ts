@@ -45,6 +45,13 @@ export function runDetection(
   for (const inc of openInc) {
     if (inc.fault_id && !activeFaultIds.has(inc.fault_id)) {
       db.prepare("UPDATE incidents SET state='resolved', resolved_at=? WHERE id=?").run(simMin, inc.id);
+      // e.g. the utility restored power: tell the customers we notified.
+      const told = (db.prepare("SELECT COUNT(*) n FROM blast_radius WHERE incident_id=? AND notified_at IS NOT NULL").get(inc.id) as { n: number }).n;
+      if (told > 0) {
+        db.prepare(
+          "INSERT INTO notifications (id, incident_id, proposal_id, lines_count, message_template, eta_given_hrs, sent_at, followup_kind, before_call) VALUES (?,?,NULL,?,?,NULL,?,'closure',0) ON CONFLICT(id) DO NOTHING"
+        ).run(`CLOSE-${inc.id}`, inc.id, told, "Good news — your internet service has been restored. Thank you for your patience. — Globe Broadband", simMin);
+      }
     }
   }
 
@@ -257,7 +264,11 @@ function upsertIncident(db: DB, a: UpsertArgs): void {
       : state;
     db.prepare(
       `UPDATE incidents SET detected_via=?, telemetry_dark=?, fault_kind=?, fault_kind_confidence=?,
-        detection_confidence=?, top_suspect=?, top_confidence=?, state=?,
+        detection_confidence=?,
+        -- Once a crew is working the dispatched element, the suspect is what they were sent to.
+        top_suspect=CASE WHEN state IN ('repairing','verifying') THEN top_suspect ELSE ? END,
+        top_confidence=CASE WHEN state IN ('repairing','verifying') THEN top_confidence ELSE ? END,
+        state=?,
         confirmed_at=COALESCE(confirmed_at, CASE WHEN ?='confirmed' THEN ? ELSE NULL END)
        WHERE id=?`
     ).run(

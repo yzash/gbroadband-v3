@@ -84,6 +84,45 @@ export function runIsolation(
       inc.id
     );
   }
+  refreshRepairingBlast(db, simMin);
+}
+
+/**
+ * Once an incident is being repaired its suspect and blast radius are fixed,
+ * but the world keeps moving: customers still call (cluster their tickets to
+ * the known root cause — Customer Service sees the answer) and outage hours
+ * keep growing (which is what triggers credits and retention offers).
+ */
+function refreshRepairingBlast(db: DB, simMin: number): void {
+  const ids = (db.prepare("SELECT id FROM incidents WHERE state IN ('repairing','verifying')").all() as { id: string }[]).map((r) => r.id);
+  if (!ids.length) return;
+  const link = db.prepare(
+    `UPDATE tickets SET parent_incident_id=? WHERE closed_at IS NULL AND kind='valid' AND parent_incident_id IS NULL
+        AND line_id IN (SELECT line_id FROM blast_radius WHERE incident_id=?)`
+  );
+  const observe = db.prepare(
+    `UPDATE blast_radius SET ticketed=1, evidence='observed'
+      WHERE incident_id=? AND ticketed=0 AND line_id IN (SELECT line_id FROM tickets WHERE closed_at IS NULL AND kind='valid')`
+  );
+  const hours = db.prepare(
+    `UPDATE blast_radius SET hours_down = ROUND((? - (SELECT COALESCE(l.offline_since, l.degraded_since) FROM lines l WHERE l.line_id = blast_radius.line_id)) / 60.0, 2)
+      WHERE incident_id=? AND line_id IN (SELECT line_id FROM lines WHERE status != 'online')`
+  );
+  const roll = db.prepare(
+    `UPDATE incidents SET
+        worst_hours_down = (SELECT COALESCE(MAX(hours_down), 0) FROM blast_radius WHERE incident_id = incidents.id),
+        observed_count   = (SELECT COUNT(*) FROM blast_radius WHERE incident_id = incidents.id AND evidence = 'observed'),
+        inferred_count   = (SELECT COUNT(*) FROM blast_radius WHERE incident_id = incidents.id AND evidence = 'inferred')
+      WHERE id=?`
+  );
+  db.transaction(() => {
+    for (const id of ids) {
+      link.run(id, id);
+      observe.run(id);
+      hours.run(simMin, id);
+      roll.run(id);
+    }
+  })();
 }
 
 function rankSuspects(

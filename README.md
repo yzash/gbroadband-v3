@@ -1,11 +1,11 @@
-# SDAL Platform Demo — Globe Broadband Intelligence
+# SDAL Framework Demo — Globe Broadband Intelligence
 
 **Sense → Decide → Act → Learn** — probabilistic fault inference & localization on a
 GPON network topology, under deliberately imperfect data (dark sensors, delayed feeds,
 wrong plant records). A living simulation: pause, run at 1×/4×/16×, or jump 6 hours.
 
 > **DEMONSTRATION ENVIRONMENT · SYNTHETIC DATA.** No real customers, vendors, or PII.
-> No auth (role switcher). The "Ask (GE)" surface is styled after GE and always captioned.
+> No auth (persona switcher). The "Ask (GE)" surface is styled after GE and always captioned.
 
 ## What it does
 
@@ -17,11 +17,13 @@ wrong plant records). A living simulation: pause, run at 1×/4×/16×, or jump 6
   predicts MTTR, and prioritizes by ₱ exposure.
 - **Act** — a strictly-ordered, human-in-the-loop ladder: remote reboot → confirming test
   → dispatch (right vendor, right parts, duplicate-suppressed, power-outage → no fiber
-  crew) → proactive notification (which actually deflects calls) → credits. Every action:
-  propose → approve (role-gated) → execute → audit.
-- **Learn** — verifies repairs (reopens on failure), measures retention lift vs. a 10%
-  holdout, call deflection, wrong-roll rate, suggests plant-record corrections, and
-  retrains the MTTR model (re-ranking the queue).
+  crew) → proactive notification (which actually deflects calls) → credits → account-manager
+  heads-ups → home visits (only when remote fixes fail) → campaign holds → retention offers.
+  Every action: propose → approve (by the persona that owns it) → execute → audit.
+- **Learn** — verifies repairs (reopens on failure), collects structured **close-outs from
+  last-mile partners** (true fault location, root cause, plant-record errors seen) that
+  become record corrections, measures retention lift vs. a 10% holdout, call deflection,
+  wrong-roll rate, and retrains the MTTR model (re-ranking the queue).
 
 ## Architecture
 
@@ -74,8 +76,35 @@ pub/sub — the SQLite/singleton/SSE design is intentional.)*
 
 ## Screens
 
-Network Map (Operations) · Detections · Incident Room · Approvals & Audit · Learn ·
-Ask the Network · Configurations — plus the hidden `/director` and `/debug/data`.
+Network Map (Operations) · Detections · Incident Room · Approvals & Audit · the **Teams on
+SDAL** workspaces (Who runs on SDAL · Customer Service · Sales Force · CFS Home Visits ·
+Last-mile Partners · Brand & Marketing) · Learn · Ask the Network · Configurations — plus
+the hidden `/director` and `/debug/data`.
+
+**Personas.** SDAL is a framework that six teams run on. Each persona (defined in
+[`src/lib/personas.ts`](src/lib/personas.ts); names are placeholders) has a workspace,
+owns specific decisions, and hands work to the others:
+
+| Persona | Workspace | Owns (approves / submits) |
+|---|---|---|
+| NOC Lead | Incident Room | remote fixes, confirming tests, partner dispatch |
+| Customer Service | `/care` — caller lookup with the answer on screen | customer notices, service credits |
+| Sales Force | `/sales` — affected accounts, where to sell | account-manager heads-ups |
+| CFS home-visit technician | `/field` — visits only when needed | home visits |
+| Last-mile partner | `/partners` — dispatch briefs, close-outs, scorecard | close-out reports (the field feedback loop) |
+| Brand & Marketing | `/marketing` — acquisition guardrail, base, comms | campaign holds, retention offers |
+
+`/personas` shows the persona dynamics (one outage flowing through Sense → Decide → Act →
+Learn across all six teams), and the Incident Room shows live hand-offs for each incident.
+Switch persona from the top-right picker (or `?as=customer_service` etc. in the URL).
+
+**Presenter captions.** The **Captions** toggle in the top bar (or `?captions=1`) docks a
+lower-third on every screen: a keyword for emphasis plus the outcome it proves, computed
+live from the simulation — made for recording the demo video.
+
+**One-click demo.** `/director` → **Prepare leadership demo** resets the world, plays a day
+of outages with every team acting, then leaves one fresh "hero" outage with live decisions
+for each persona. Deterministic: the same numbers every time.
 
 **Map.** The Network Map is a MapLibre GL (WebGL) map of real Metro Manila geography — the
 17 NCR cities from PSA PSGC 2023 boundaries (bundled; no tile server or API key needed).
@@ -90,5 +119,4 @@ in one file, [`src/lib/brand.ts`](src/lib/brand.ts) (Tailwind and the map read f
 the brand team can correct hex values in one place. The logo mark in the top bar is a
 placeholder; Montserrat stands in for Globe's corporate typeface.
 
-Roles (top-right switcher): **NOC Lead** approves dispatch & tests; **CX Ops** approves
-comms & credits; **Read-only** observes.
+A **Read-only** persona observes and approves nothing.

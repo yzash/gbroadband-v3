@@ -132,8 +132,8 @@ function rand(lineId: string): number {
 
 /**
  * Churn hazard while a line is down rises with unrepaired hours. Proactive
- * notification slows that build-up (~45%), and a credit knocks it back. The
- * 10% holdout never receives either — it is the control group for the lift
+ * notification slows that build-up (~45%); a credit or a retention offer knocks it back. The
+ * 10% holdout never receives any of them — it is the control group for the lift
  * measured on the Learn screen. Once a line recovers the risk decays slowly
  * (per sim-hour), so the treatment effect stays measurable.
  */
@@ -150,6 +150,11 @@ export function updateChurnHazard(db: DB, simMin: number, minutes = 1): void {
                                    (SELECT b.line_id FROM blast_radius b JOIN notifications n
                                       ON n.incident_id = b.incident_id AND n.followup_kind = 'credit')
                                  THEN 0.12 ELSE 0 END)
+                       - (CASE WHEN subscribers.holdout = 0 AND subscribers.line_id IN
+                                   (SELECT b.line_id FROM blast_radius b JOIN notifications n
+                                      ON n.incident_id = b.incident_id AND n.followup_kind = 'offer'
+                                     WHERE b.hours_down >= 3)
+                                 THEN 0.08 ELSE 0 END)
                   ELSE subscribers.churn_hazard - 0.005 * @minutes / 60.0 END
              FROM lines l WHERE l.line_id = subscribers.line_id), 3)))`
   ).run({ simMin, minutes });

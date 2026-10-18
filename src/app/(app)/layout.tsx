@@ -1,6 +1,7 @@
 import { LeftRail } from "@/components/LeftRail";
 import { TopBar } from "@/components/TopBar";
 import { Footer } from "@/components/Footer";
+import { Captions } from "@/components/Captions";
 
 export default function ShellLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
         <LeftRail />
         <main className="relative min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
+      <Captions />
       <Footer />
     </div>
   );

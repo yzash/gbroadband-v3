@@ -3,7 +3,7 @@ import { healthFromRatio } from "./tokens";
 import type { CityStat, OpsSnapshot } from "./types";
 import type { GeoPayload } from "./geo-client";
 
-export type LayerMode = "health" | "sensing" | "tickets" | "revenue" | "records";
+export type LayerMode = "health" | "sensing" | "tickets" | "revenue" | "records" | "market";
 
 export interface LayerDef {
   id: LayerMode;
@@ -59,6 +59,16 @@ export const LAYERS: LayerDef[] = [
       { color: BRAND.record, label: "Low confidence" },
       { color: "#4A3A8C", label: "Medium" },
       { color: BRAND.ink3, label: "Trusted" },
+    ],
+  },
+  {
+    id: "market",
+    label: "Sell / hold",
+    question: "Where should Sales and Marketing push — and where should they hold?",
+    legend: [
+      { color: BRAND.healthy, label: "Sell" },
+      { color: BRAND.watch, label: "Sell with care" },
+      { color: BRAND.critical, label: "Hold · campaign paused" },
     ],
   },
 ];
@@ -122,6 +132,8 @@ export function cityFill(layer: LayerMode, s: CityStat | undefined): string {
         ],
         s.record_conf
       );
+    case "market":
+      return { sell: "#0E3B33", care: "#3A3416", hold: "#5A1A2C" }[s.sell];
   }
 }
 
@@ -160,10 +172,13 @@ export function lineStyle(layer: LayerMode, l: GeoPayload["lines"][number], ctx:
       if (l.conf < 0.7) return { c: BRAND.record, a: 1, crit: 1, r: 1.2 };
       if (l.conf < 0.88) return { c: "#6F55C2", a: 1, crit: 0, r: 1 };
       return { c: "#3A4870", a: 0, crit: 0, r: 0.8 };
+    case "market":
+      if (h === "critical" || h === "degraded") return { c: BRAND.critical, a: 1, crit: 1, r: 1.1 };
+      return { c: "#1F5A4C", a: 0, crit: 0, r: 0.75 };
   }
 }
 
 /** Accent used for cluster rings / emphasis in each lens. */
 export function lensAccent(layer: LayerMode): string {
-  return { health: BRAND.critical, sensing: BRAND.unsensed, tickets: BRAND.watch, revenue: SEQ[5], records: BRAND.record }[layer];
+  return { health: BRAND.critical, sensing: BRAND.unsensed, tickets: BRAND.watch, revenue: SEQ[5], records: BRAND.record, market: BRAND.healthy }[layer];
 }

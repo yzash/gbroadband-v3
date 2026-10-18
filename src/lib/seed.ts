@@ -2,6 +2,7 @@ import { getDb, wipeAll, type DB } from "./db";
 import { RNG } from "./rng";
 import { generateWorld, worldStats, type GenWorld } from "./topology";
 import type { FaultKind } from "./types";
+import { subscriberName } from "./names";
 
 const SEED = Number(process.env.SDAL_SEED ?? 42);
 
@@ -113,7 +114,7 @@ export function seedWorld(db: DB = getDb()): SeedResult {
       const propensity = Math.min(0.95, Math.max(0.03, rng.gaussian(vip || b2b ? 0.6 : 0.35, 0.2)));
       const holdout = rng.bool(0.1) ? 1 : 0;
       const tenure = rng.int(30, 3000);
-      insSub.run(subId, ont.element_id, subId, Math.round(arpu), vip, b2b, Number(propensity.toFixed(3)), holdout, tenure);
+      insSub.run(subId, ont.element_id, subscriberName(subId, !!b2b), Math.round(arpu), vip, b2b, Number(propensity.toFixed(3)), holdout, tenure);
       insLine.run(ont.element_id, subId);
 
       const polled = rng.bool(0.7) ? 1 : 0;
@@ -152,6 +153,11 @@ export function seedWorld(db: DB = getDb()): SeedResult {
     insSig.run("REACHABILITY", "Reachability probes", "reachability", 0.85, "live");
     insSig.run("ALARM", "OLT alarm feed", "alarm", 0.8, "delayed");
     insSig.run("DYING_GASP", "Dying-gasp last breath", "dying_gasp", 0.75, "live");
+
+    // Baseline record quality, so Learn can show how much field feedback improved it.
+    db.prepare(
+      "UPDATE sim_state SET record_conf_baseline = (SELECT AVG(record_confidence) FROM topology_recorded WHERE kind='ont') WHERE id=1"
+    ).run();
 
     // keep areaByDistrict referenced (used by engine later; silence lints)
     void areaByDistrict;

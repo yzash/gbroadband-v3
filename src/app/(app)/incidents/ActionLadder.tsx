@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useApp } from "@/components/AppState";
-import { canApprove, type ProposalKind } from "@/lib/roles";
+import { APPROVER, canApprove, roleLabel, type ProposalKind } from "@/lib/roles";
+import { personaFor } from "@/lib/personas";
+import { PersonaAvatar } from "@/components/RoleSwitcher";
 import { fmtHrs } from "@/lib/tokens";
 
 interface Proposal {
@@ -21,7 +23,14 @@ const LADDER: { kind: ProposalKind; step: number; label: string }[] = [
   { kind: "dispatch", step: 3, label: "Dispatch" },
   { kind: "notification", step: 4, label: "Notify" },
   { kind: "credit", step: 5, label: "Credit" },
+  { kind: "account_alert", step: 6, label: "Account heads-up" },
+  { kind: "home_visit", step: 7, label: "Home visit" },
+  { kind: "retention_offer", step: 8, label: "Retention offer" },
+  { kind: "campaign_hold", step: 9, label: "Campaign hold" },
 ];
+
+// Steps that only apply to some incidents stay hidden rather than "not needed".
+const OPTIONAL = new Set<ProposalKind>(["account_alert", "home_visit", "retention_offer", "campaign_hold"]);
 
 export function ActionLadder({
   detail,
@@ -59,14 +68,16 @@ export function ActionLadder({
   return (
     <section className="card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="section-title">Action ladder · propose → approve → execute → audit</h3>
-        <span className="text-2xs text-ink-3">acting as <span className="text-ink-2">{role}</span></span>
+        <h3 className="section-title">Action ladder · each step owned by a persona</h3>
+        <span className="text-2xs text-ink-3">acting as <span className="text-ink-2">{personaFor(role).name} · {personaFor(role).title}</span></span>
       </div>
       {err && <div className="mb-2 rounded bg-critical/15 px-2 py-1 text-2xs text-critical">{err}</div>}
       <div className="flex flex-col gap-2">
         {LADDER.map(({ kind, step, label }) => {
           const p = byKind.get(kind);
+          if (!p && OPTIONAL.has(kind)) return null;
           if (!p) return <LadderRowEmpty key={kind} step={step} label={label} />;
+          const owner = personaFor(APPROVER[kind]);
           const payload = JSON.parse(p.payload_json) as Record<string, unknown>;
           const gated = canApprove(role, kind);
           const held = !!payload.held;
@@ -78,6 +89,9 @@ export function ActionLadder({
                     <span className="chip bg-surface-3 text-ink-3">step {step}</span>
                     <span className="text-sm font-medium text-ink">{String(payload.title ?? label)}</span>
                     <StateTag state={p.state} />
+                    <span className="ml-1 inline-flex items-center gap-1 text-2xs text-ink-3">
+                      <PersonaAvatar p={owner} size={16} /> {owner.name.split(" ")[0]} · {owner.group}
+                    </span>
                   </div>
                   <div className="mt-0.5 text-xs text-ink-2">{String(payload.detail ?? "")}</div>
                   <ProposalExtra kind={kind} payload={payload} />
@@ -87,7 +101,7 @@ export function ActionLadder({
                     <button
                       className="btn-primary text-xs"
                       disabled={!gated || held || busy === p.id}
-                      title={held ? "held pending upstream fix" : !gated ? `${role} can't approve this` : ""}
+                      title={held ? "held pending upstream fix" : !gated ? `Owned by ${owner.name} (${owner.title})` : ""}
                       onClick={() => decide(p.id, "approve")}
                     >
                       Approve
@@ -98,7 +112,7 @@ export function ActionLadder({
                   </div>
                 )}
                 {p.state !== "pending" && p.decided_by_role && (
-                  <span className="shrink-0 text-2xs text-ink-3">by {p.decided_by_role}</span>
+                  <span className="shrink-0 text-2xs text-ink-3">by {roleLabel(p.decided_by_role)}</span>
                 )}
               </div>
             </div>

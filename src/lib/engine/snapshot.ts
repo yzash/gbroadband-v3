@@ -99,7 +99,7 @@ export function buildSnapshot(
     const district = topo.node(lineId)?.district;
     const city = district ? cityOfDistrict.get(district) : undefined;
     if (!city) continue;
-    const cs = (city_stats[city] ??= { lines: 0, impacted: 0, offline: 0, sensed: 0, tickets: 0, peso_at_risk: 0, record_conf: 1 });
+    const cs = (city_stats[city] ??= { lines: 0, impacted: 0, offline: 0, sensed: 0, tickets: 0, peso_at_risk: 0, record_conf: 1, sell: "sell", campaign_hold: false });
     cs.lines++;
     const imp = impacted.get(lineId);
     if (imp) {
@@ -119,6 +119,14 @@ export function buildSnapshot(
     confAcc.set(city, acc);
   }
   for (const [city, acc] of confAcc) if (city_stats[city]) city_stats[city].record_conf = acc.n ? acc.sum / acc.n : 1;
+
+  // Sell / hold: active outages or a paused campaign → hold; weak visibility → sell with care.
+  const held = new Set((db.prepare("SELECT city FROM campaign_holds WHERE released_at IS NULL").all() as { city: string }[]).map((r) => r.city));
+  for (const [city, cs] of Object.entries(city_stats)) {
+    cs.campaign_hold = held.has(city);
+    const downShare = cs.lines ? cs.impacted / cs.lines : 0;
+    cs.sell = cs.campaign_hold || downShare >= 0.03 ? "hold" : downShare >= 0.01 || cs.record_conf < 0.86 ? "care" : "sell";
+  }
 
   // Incidents (M3+ populate; empty until then).
   const incidents = db
@@ -167,7 +175,7 @@ export function buildSnapshot(
   // the live position by travel progress so the map shows them moving.
   const crewRows = db
     .prepare(
-      "SELECT id as job_id, vendor_id, grid_x, grid_y, state, incident_id, target_element, lat, lon, dispatched_at, arrived_at FROM crew_jobs WHERE state != 'done'"
+      "SELECT id as job_id, vendor_id, crew_type, grid_x, grid_y, state, incident_id, target_element, lat, lon, dispatched_at, arrived_at FROM crew_jobs WHERE state != 'done'"
     )
     .all() as (Omit<CrewGlyph, "from_lat" | "from_lon" | "to_lat" | "to_lon" | "progress" | "eta_min"> & {
     dispatched_at: number;
@@ -184,6 +192,7 @@ export function buildSnapshot(
     return {
       job_id: c.job_id,
       vendor_id: c.vendor_id,
+      crew_type: c.crew_type,
       grid_x: c.grid_x,
       grid_y: c.grid_y,
       state: c.state,

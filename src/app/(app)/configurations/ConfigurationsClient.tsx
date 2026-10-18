@@ -41,8 +41,8 @@ export function ConfigurationsClient() {
           {[
             ["Sense", "fuse tickets + telemetry + reachability + alarms into probabilistic detections"],
             ["Decide", "isolate · classify · scope · predict MTTR · prioritize by ₱"],
-            ["Act", "remote → test → dispatch → notify → credit, HITL-gated"],
-            ["Learn", "verify · lift vs holdout · call deflection · record corrections · retrain"],
+            ["Act", "remote → test → dispatch → notify → credit → account heads-up → home visit → campaign hold → offer · each owned by its team"],
+            ["Learn", "verify · partner close-outs · record corrections · lift vs holdout · call deflection · retrain"],
           ].map(([k, v]) => (
             <div key={k} className="rounded-md bg-surface-2 p-2">
               <div className="font-semibold text-doctrine">{k}</div>
@@ -53,7 +53,7 @@ export function ConfigurationsClient() {
       </div>
 
       {/* Registry */}
-      <h3 className="section-title mb-2 mt-6">Configuration registry · same loop, configuration only</h3>
+      <h3 className="section-title mb-2 mt-6">Configuration registry · the same SDAL framework, configured for the next outcome</h3>
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {REGISTRY.map((r) => (
           <div key={r.name} className="card-2 p-4 opacity-60">
@@ -68,7 +68,7 @@ export function ConfigurationsClient() {
               <span><b className="text-ink-3">A</b> {r.act}</span>
               <span><b className="text-ink-3">L</b> {r.learn}</span>
             </div>
-            <div className="mt-2 text-[10px] uppercase tracking-wider text-ink-3">same loop · configuration only</div>
+            <div className="mt-2 text-[10px] uppercase tracking-wider text-ink-3">same framework · configuration only</div>
           </div>
         ))}
       </div>

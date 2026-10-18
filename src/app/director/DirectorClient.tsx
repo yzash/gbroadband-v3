@@ -51,6 +51,19 @@ export function DirectorClient() {
     push(`sensing: coverage ${coverage}% · alarm delay ${alarmDelay}m · dead OLT ${deadOlt || "none"}`);
   };
   const clock = async (body: object) => { await fetch("/api/clock", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); };
+  const [demo, setDemo] = useState<{ hero: string; heroCity: string } | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const prepare = async () => {
+    setPreparing(true);
+    try {
+      const r = await fetch("/api/director/scenario", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "leadership_demo" }) });
+      const j = await r.json();
+      setDemo({ hero: j.hero, heroCity: j.heroCity });
+      push(`leadership demo ready — hero ${j.hero} in ${j.heroCity}`);
+    } finally {
+      setPreparing(false);
+    }
+  };
   const reset = async () => { await fetch("/api/reset", { method: "POST" }); push("world reset to seed"); };
 
   return (
@@ -65,6 +78,24 @@ export function DirectorClient() {
           <div>{sim?.running ? `running ${sim.speed}×` : "paused"}</div>
         </div>
       </div>
+
+      <section className="card mb-4 flex flex-wrap items-center justify-between gap-4 border-globe-sky/40 p-4">
+        <div>
+          <h2 className="font-display text-lg font-bold text-ink">Leadership demo · one click</h2>
+          <p className="text-xs text-ink-2">
+            Resets the world, plays a day of outages with every team acting, then leaves one fresh &ldquo;hero&rdquo; outage with live decisions
+            for each persona. Deterministic: the same numbers every time. Takes a few seconds.
+          </p>
+          {demo && (
+            <p className="mt-1 text-xs text-healthy" data-testid="demo-ready">
+              Ready — hero outage <span className="font-mono">{demo.hero}</span> in {demo.heroCity}. Open the Network Map and start recording.
+            </p>
+          )}
+        </div>
+        <button className="btn-primary px-5 py-2.5 text-sm" disabled={preparing} onClick={prepare} data-testid="prepare-demo">
+          {preparing ? "Preparing…" : "Prepare leadership demo"}
+        </button>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Injectors */}

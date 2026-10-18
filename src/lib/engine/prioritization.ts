@@ -85,7 +85,12 @@ export function runPrioritization(db: DB): void {
 
     // Power outages get no fiber crew — notify + monitor. Vendor stays null.
     let vendorId: string | null = null;
-    if (inc.fault_kind !== "power_outage") {
+    // Once a crew is out, the incident's vendor is the crew that was sent.
+    const dispatched = db
+      .prepare("SELECT vendor_id FROM crew_jobs WHERE incident_id=? AND crew_type='partner' ORDER BY dispatched_at DESC LIMIT 1")
+      .get(inc.id) as { vendor_id: string } | undefined;
+    if (dispatched) vendorId = dispatched.vendor_id;
+    else if (inc.fault_kind !== "power_outage") {
       vendorId = pickVendor(vendors, inc.fault_kind, district, loadByVendor);
     }
 

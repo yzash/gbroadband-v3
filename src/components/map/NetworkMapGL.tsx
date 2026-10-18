@@ -593,12 +593,13 @@ export default function NetworkMapGL(p: Props) {
         }
         m.setLngLat([c.lon, c.lat]);
         const onsite = c.state === "onsite";
-        m.getElement().innerHTML = `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px 3px 5px;border-radius:999px;background:${
-          onsite ? BRAND.healthy : BRAND.watch
-        };color:#040918;font:800 10px 'Source Sans 3',sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5)">${TRUCK}${
-          onsite ? "On site" : `${Math.round(c.eta_min)}m`
-        }</div>`;
-        m.getElement().title = `Crew ${c.vendor_id} → ${c.target_element} · ${c.state}`;
+        const cfs = c.crew_type === "cfs";
+        // Partner crews: truck, amber → green on site. CFS home-visit techs: house, sky.
+        const bg = cfs ? BRAND.globeSky : onsite ? BRAND.healthy : BRAND.watch;
+        m.getElement().innerHTML = `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px 3px 5px;border-radius:999px;background:${bg};color:#040918;font:800 10px 'Source Sans 3',sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5)">${
+          cfs ? HOUSE : TRUCK
+        }${cfs ? (onsite ? "CFS visit" : `CFS ${Math.round(c.eta_min)}m`) : onsite ? "On site" : `${Math.round(c.eta_min)}m`}</div>`;
+        m.getElement().title = cfs ? `CFS home visit → ${c.target_element} · ${c.state}` : `Partner crew ${c.vendor_id} → ${c.target_element} · ${c.state}`;
       }
     }
     for (const [id, m] of crewMarkers.current) {
@@ -667,6 +668,9 @@ export default function NetworkMapGL(p: Props) {
 
 const TRUCK =
   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>';
+
+const HOUSE =
+  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg>';
 
 function hexAlpha(hex: string, a: number): string {
   const h = hex.replace("#", "");

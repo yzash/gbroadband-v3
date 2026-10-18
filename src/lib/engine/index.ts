@@ -29,11 +29,12 @@ import {
   bumpLearn,
   resetProposalSeq,
   resetCrewSeq,
+  submitCloseoutNow,
 } from "./proposals";
 import { runVerification, acceptCorrection } from "./verification";
 import { retrainModel } from "./learn-ops";
 import { RecordedIndex } from "./recorded-index";
-import type { Role } from "../roles";
+import { APPROVER, type ProposalKind, type Role } from "../roles";
 
 const TICK_MS = 1000; // one real second per tick
 type Listener = (json: string) => void;
@@ -136,7 +137,7 @@ function stepWorld(minutes: number): void {
   db.prepare("UPDATE sim_state SET sim_min=? WHERE id=1").run(simMin);
 
   clearExpiredFaults(db, simMin);
-  crewStep(db, c.topo, simMin); // advance crews; completed repairs resolve faults
+  crewStep(db, c.topo, c.rec, simMin); // advance crews; completed repairs file close-outs and resolve faults
   const spawned = spawnBackgroundFaults(db, c.rng, c.topo, simMin, minutes);
   for (const f of spawned) {
     const impLines = f.element_id ? c.topo.linesUnder(f.element_id).length : 0;
@@ -266,6 +267,18 @@ export function decide(
   return res;
 }
 
+/** Partner portal: a crew on site submits its close-out now. */
+export function submitCloseout(jobId: string): { ok: boolean; error?: string } {
+  const c = core();
+  const simMin = getSimState(c.db)!.sim_min;
+  const res = submitCloseoutNow(c.db, c.topo, c.rec, jobId, simMin);
+  if (res.ok) {
+    applyImpactNow(c, simMin);
+    publish();
+  }
+  return res;
+}
+
 /** Learn: retrain the MTTR model from outcomes and re-rank incidents. */
 export function retrain(): { version: number; adjusted: number } {
   const c = core();
@@ -335,7 +348,9 @@ export function injectScenario(
         element = c.rng.pick(c.topo.allLines);
     }
   }
-  return inject({ kind, element_id: element, power_grid: powerGrid, autoClearMin: opts?.autoClearMin ?? null });
+  // A commercial power outage ends when the utility restores power (~4h) — there is no crew to send.
+  const autoClear = opts?.autoClearMin ?? (kind === "power_outage" ? 240 : null);
+  return inject({ kind, element_id: element, power_grid: powerGrid, autoClearMin: autoClear });
 }
 
 /** Ticket storm: inject a distribution cut + a burst of invalid tickets. */
@@ -389,4 +404,108 @@ function applyCoverage(db: DB, rng: RNG, coverage: number): void {
     for (const l of lines) upd.run(rng.bool(coverage) ? 1 : 0, l.line_id);
   });
   tx();
+}
+
+// ---- One-click leadership demo ------------------------------------------------
+
+function approveAllPending(c: EngineCore, only?: (kind: ProposalKind, incidentId: string) => boolean): number {
+  const pending = c.db.prepare("SELECT id, kind, incident_id, payload_json FROM proposals WHERE state='pending' ORDER BY created_at, id").all() as {
+    id: string;
+    kind: ProposalKind;
+    incident_id: string;
+    payload_json: string;
+  }[];
+  let n = 0;
+  for (const p of pending) {
+    if (only && !only(p.kind, p.incident_id)) continue;
+    if ((JSON.parse(p.payload_json) as { held?: boolean }).held) continue;
+    if (decide(p.id, "approve", APPROVER[p.kind]).ok) n++;
+  }
+  return n;
+}
+
+/**
+ * Prepare the leadership walkthrough deterministically: a day of history in
+ * which every team has acted (so Learn, partner close-outs, retention lift and
+ * campaign holds all have real numbers), then one fresh "hero" outage left
+ * with live decisions for each persona to make on camera.
+ */
+export function leadershipDemo(): { hero: string | null; heroCity: string | null; heroElement: string; simMin: number } {
+  const c = core();
+  stopTimer();
+  resetWorld();
+  setSensing({ coverage: 0.45 });
+
+  // History: a day of outages, every team acting on its own decisions.
+  for (const k of ["feeder_cut", "distribution_cut", "power_outage", "drop_cut", "cpe_issue", "cpe_issue"] as FaultKind[]) injectScenario(k);
+  // Each team acts on its queue within half an hour, as it would on shift.
+  for (let i = 0; i < 36; i++) {
+    stepWorld(30);
+    approveAllPending(c);
+  }
+  // Partners' record fixes: most are already accepted; leave the newest to accept live.
+  const sugg = c.db.prepare("SELECT id FROM record_corrections WHERE status='suggested' ORDER BY sim_ts ASC, id ASC").all() as { id: string }[];
+  for (const r of sugg.slice(0, Math.max(0, sugg.length - 3))) acceptCorrection(c.db, r.id, getSimState(c.db)!.sim_min);
+  c.rec = new RecordedIndex(c.db);
+
+  // The hero outage: a primary-splitter cut concentrated in one city, with business accounts.
+  const hero = pickHeroSplitter(c);
+  injectScenario("distribution_cut", { element_id: hero });
+  for (let i = 0; i < 4; i++) stepWorld(15); // an hour: tickets accrue, isolation hardens
+  const inc = c.db
+    .prepare("SELECT i.id FROM incidents i JOIN faults f ON f.id = i.fault_id WHERE f.element_id = ? AND i.state != 'resolved' ORDER BY i.detected_at DESC LIMIT 1")
+    .get(hero) as { id: string } | undefined;
+  // Background noise from the last hour is handled; the hero gets its NOC decisions
+  // and the crew is sent — it arrives on camera once the presenter runs the clock.
+  approveAllPending(c, (_k, id) => id !== inc?.id);
+  if (inc) {
+    approveAllPending(c, (k, id) => id === inc.id && (k === "confirming_test" || k === "dispatch"));
+    // A 120-line cut takes the long end of the repair estimate (p90), so the crew is
+    // still on site when the partner files the close-out at the end of the walkthrough.
+    const p90 = (c.db.prepare("SELECT predicted_mttr_p90 FROM incidents WHERE id=?").get(inc.id) as { predicted_mttr_p90: number }).predicted_mttr_p90;
+    c.db
+      .prepare("UPDATE crew_jobs SET done_at = arrived_at + ? WHERE incident_id=? AND crew_type='partner' AND state != 'done'")
+      .run(Math.round(Math.max(5, p90) * 60), inc.id);
+  }
+
+  c.db.prepare("UPDATE sim_state SET speed=0, running=0 WHERE id=1").run();
+  publish();
+  const city = inc
+    ? ((c.db
+        .prepare(
+          "SELECT d.city FROM blast_radius b JOIN topology_truth t ON t.element_id=b.line_id JOIN districts d ON d.id=t.district_id WHERE b.incident_id=? GROUP BY d.city ORDER BY COUNT(*) DESC LIMIT 1"
+        )
+        .get(inc.id) as { city: string } | undefined)?.city ?? null)
+    : null;
+  logEvent("director", `Leadership demo prepared — hero outage ${inc?.id ?? "?"} in ${city ?? "?"}`, inc ? `/incidents?id=${inc.id}` : null, "DIRECTOR");
+  publish();
+  return { hero: inc?.id ?? null, heroCity: city, heroElement: hero, simMin: getSimState(c.db)!.sim_min };
+}
+
+function pickHeroSplitter(c: EngineCore): string {
+  const cityOf = new Map((c.db.prepare("SELECT id, city FROM districts").all() as { id: string; city: string }[]).map((d) => [d.id, d.city]));
+  const cityLines = new Map<string, number>();
+  for (const l of c.topo.allLines) {
+    const city = cityOf.get(c.topo.node(l)?.district ?? "");
+    if (city) cityLines.set(city, (cityLines.get(city) ?? 0) + 1);
+  }
+  const b2b = new Set((c.db.prepare("SELECT line_id FROM subscribers WHERE b2b=1 AND holdout=0").all() as { line_id: string }[]).map((r) => r.line_id));
+  const down = new Set((c.db.prepare("SELECT line_id FROM lines WHERE status != 'online'").all() as { line_id: string }[]).map((r) => r.line_id));
+  let best = { id: "", score: -1 };
+  for (const node of c.topo.nodes.values()) {
+    if (node.kind !== "splitter") continue;
+    const lines = c.topo.linesUnder(node.id);
+    if (lines.length < 40 || lines.some((l) => down.has(l))) continue;
+    const byCity = new Map<string, number>();
+    for (const l of lines) {
+      const city = cityOf.get(c.topo.node(l)?.district ?? "") ?? "";
+      byCity.set(city, (byCity.get(city) ?? 0) + 1);
+    }
+    const [city, inCity] = [...byCity.entries()].sort((a, b) => b[1] - a[1])[0];
+    const share = inCity / (cityLines.get(city) ?? 1);
+    if (share < 0.06) continue; // big enough that Marketing should hold campaigns there
+    const score = lines.filter((l) => b2b.has(l)).length * 10 + lines.length;
+    if (score > best.score) best = { id: node.id, score };
+  }
+  return best.id || [...c.topo.nodes.values()].find((n) => n.kind === "splitter")!.id;
 }

@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Building2,
+  Headset,
+  Home,
+  Megaphone,
+  Truck,
+  Users,
   BrainCircuit,
   ChevronsLeft,
   ChevronsRight,
@@ -40,9 +46,20 @@ const GROUPS: { stage: string; items: Item[] }[] = [
       { href: "/proposals", label: "Approvals & Audit", icon: ClipboardCheck },
     ],
   },
+  {
+    stage: "Teams on SDAL",
+    items: [
+      { href: "/personas", label: "Who runs on SDAL", icon: Users },
+      { href: "/care", label: "Customer Service", icon: Headset },
+      { href: "/sales", label: "Sales Force", icon: Building2 },
+      { href: "/field", label: "CFS Home Visits", icon: Home },
+      { href: "/partners", label: "Last-mile Partners", icon: Truck },
+      { href: "/marketing", label: "Brand & Marketing", icon: Megaphone },
+    ],
+  },
   { stage: "Learn", items: [{ href: "/learn", label: "Learn", icon: BrainCircuit }] },
   { stage: "Assist", items: [{ href: "/ask", label: "Ask the Network", icon: Sparkles }] },
-  { stage: "Platform", items: [{ href: "/configurations", label: "Configurations", icon: Settings2 }] },
+  { stage: "Framework", items: [{ href: "/configurations", label: "Configurations", icon: Settings2 }] },
 ];
 
 export function LeftRail() {
@@ -78,7 +95,7 @@ export function LeftRail() {
     >
       <div className="flex-1 overflow-y-auto py-3">
         {GROUPS.map((g) => (
-          <div key={g.stage} className="mb-2">
+          <div key={g.stage} className="mb-1">
             {open ? (
               <div className="px-5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3/80">{g.stage}</div>
             ) : (
@@ -94,7 +111,7 @@ export function LeftRail() {
                   href={item.href}
                   title={item.label}
                   className={[
-                    "group relative mx-2 flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors",
+                    "group relative mx-2 flex h-9 items-center gap-3 rounded-md px-3 text-[13.5px] transition-colors",
                     active ? "bg-globe/40 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
                   ].join(" ")}
                 >

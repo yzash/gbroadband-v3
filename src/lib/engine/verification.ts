@@ -41,6 +41,13 @@ export function runVerification(db: DB, topo: TopoIndex, rec: RecordedIndex, sim
       bumpLearn(db, day, "repairs_total", 1);
       if (inWindow) bumpLearn(db, day, "repairs_in_window", 1);
       bumpLearn(db, day, "correct_rolls", 1);
+      // Close the loop with the customers we told: a restoration notice.
+      const told = (db.prepare("SELECT COUNT(*) n FROM blast_radius WHERE incident_id=? AND notified_at IS NOT NULL").get(inc.id) as { n: number }).n;
+      if (told > 0) {
+        db.prepare(
+          "INSERT INTO notifications (id, incident_id, proposal_id, lines_count, message_template, eta_given_hrs, sent_at, followup_kind, before_call) VALUES (?,?,NULL,?,?,NULL,?,'closure',0) ON CONFLICT(id) DO NOTHING"
+        ).run(`CLOSE-${inc.id}`, inc.id, told, "Good news — your internet service has been restored. Thank you for your patience. — Globe Broadband", simMin);
+      }
       logEvent(db, simMin, "verify", `Repair verified — ${inc.id} resolved in ${mttr.toFixed(1)}h (${inWindow ? "within" : "over"} window)`, `/incidents?id=${inc.id}`, "VERIFY");
     } else {
       // Wrong roll: fault still live. Reopen and suggest a record correction.
@@ -74,8 +81,9 @@ function suggestCorrection(
     const recNode = rec.node(line);
     const truthNode = topo.node(line);
     if (recNode?.mismapped && recNode.parent && truthNode?.parent && recNode.parent !== truthNode.parent) {
-      const already = db.prepare("SELECT 1 FROM record_corrections WHERE line_id=? AND status='suggested'").get(line);
-      if (already) return;
+      // Any existing row (suggested or accepted, from a repair or a partner close-out) wins.
+      const already = db.prepare("SELECT 1 FROM record_corrections WHERE line_id=?").get(line);
+      if (already) continue;
       db.prepare(
         "INSERT INTO record_corrections (id, line_id, from_parent, to_parent, source, status, incident_id, sim_ts) VALUES (?,?,?,?,?,?,?,?)"
       ).run(`RC-${line}`, line, recNode.parent, truthNode.parent, "repair_finding", "suggested", incidentId, simMin);

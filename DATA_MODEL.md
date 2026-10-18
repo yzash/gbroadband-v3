@@ -6,8 +6,8 @@ synthetic-data generation parameters, the inference algorithms, the engine pipel
 [`src/lib/schema.sql`](src/lib/schema.sql); this document annotates it and fills in the
 generation + algorithm details the raw DDL doesn't capture.
 
-- **Store:** SQLite (`better-sqlite3`, WAL) at `SDAL_DB_PATH`. 29 tables, 18 indexes.
-- **Schema version:** `PRAGMA user_version = 2`. On boot, a DB with a different version is
+- **Store:** SQLite (`better-sqlite3`, WAL) at `SDAL_DB_PATH`. 31 tables, 19 indexes.
+- **Schema version:** `PRAGMA user_version = 3`. On boot, a DB with a different version is
   dropped and re-seeded automatically (safe for the Render disk; bump `SCHEMA_VERSION` in
   `src/lib/db.ts` whenever `schema.sql` changes).
 - **Units:** all timestamps are **integer sim-minutes since world epoch** (`sim_min`), not
@@ -84,6 +84,7 @@ INTEGER sim-minutes; `hrs`/`peso` = REAL.
 | `dead_olt` | TEXT? | OLT whose alarm feed is down (nullable) |
 | `repair_window_hrs` | REAL | SLA-ish threshold (default 6.0) — a **setting, never a claim** |
 | `model_version` | int | active MTTR model version |
+| `record_conf_baseline` | REAL | average ONT record confidence at seed (Learn: how much field feedback improved records) |
 
 **`districts`** — 40 real Metro Manila neighbourhoods across the 17 NCR LGUs. `city` (LGU
 name, matches `public/geo/ncr-cities.geojson`), `lat/lon` (WGS84 centroid), `grid_x/grid_y`
@@ -179,21 +180,38 @@ ALARM .80 (delayed), DYING_GASP .75.
 ### 3.7 Action ladder (HITL)
 
 **`proposals`** — `id` PK, `incident_id`, `kind`
-(`remote_action|confirming_test|dispatch|notification|credit`), `state`
+(`remote_action|confirming_test|dispatch|notification|credit|account_alert|home_visit|campaign_hold|retention_offer`), `state`
 (`pending|approved|rejected|executed`), `payload_json` (kind-specific display + args),
 `target_element`, `vendor_id`, `created_at`, `decided_at`, `decided_by_role`, `rationale`.
 Indexes: `incident_id`, `state`.
 
-**`crew_jobs`** — dispatched work. `id` PK, `proposal_id`, `incident_id`, `vendor_id`,
-`target_element`, `grid_x/y`, `state` (`enroute|onsite|done`), `dispatched_at`,
-`arrived_at`, `done_at`, `found_at_element`, `correct` (bool — target contained the true
-fault). Index: `state`.
+**`crew_jobs`** — dispatched work. `id` PK, `proposal_id`, `incident_id`, `vendor_id`
+(partner id, or `CFS`), `crew_type` (`partner|cfs`), `target_element`, `lat/lon`, `grid_x/y`,
+`state` (`enroute|onsite|done`), `dispatched_at`, `arrived_at`, `done_at`,
+`found_at_element` (exact element where the crew found the fault), `correct` (bool — target
+contained the true fault), `closeout_by` (`partner` when the partner filed the close-out
+early from the portal). Index: `state`.
 
 **`remote_actions`** — `id`, `line_id`, `incident_id`, `kind` (`diagnostic|reboot`),
 `result`, `sim_ts`.
 
 **`notifications`** — `id`, `incident_id`, `proposal_id`, `lines_count`,
-`message_template`, `eta_given_hrs`, `sent_at`, `followup_kind` (`progress|closure|credit`).
+`message_template`, `eta_given_hrs`, `sent_at`, `followup_kind`
+(`progress|closure|credit|account|offer`), `before_call` (recipients who had not called yet
+when it went out — "told before they called").
+
+**`partner_reports`** — the last-mile feedback loop: one structured close-out per finished
+job. `id` PK (`CO-<job>`), `job_id`, `incident_id`, `vendor_id`, `crew_type`,
+`element_dispatched`, `element_found`, `root_cause`, `action_taken`, `parts_used`,
+`first_time_fix` (bool — fault inside what SDAL dispatched to), `on_time` (bool — arrived
+within 1.1× the promised travel time), `minutes_onsite`, `discrepancies` (new plant-record
+errors the crew reported; each becomes a `record_corrections` row with
+`source='partner_closeout'`), `photos`, `submitted_at`, `submitted_via`
+(`partner_app|partner_portal`).
+
+**`campaign_holds`** — Brand & Marketing acquisition guardrail. `id` PK, `city`,
+`incident_id`, `held_at`, `released_at` (NULL while paused), `spend_per_day` (illustrative
+paid-acquisition spend paused, PHP/day = lines × 15), `approved_by`.
 
 ### 3.8 Learn substrate
 
@@ -324,11 +342,21 @@ repair_window) × (0.5 + 0.5 × max(top_confidence, detection_confidence))`.
 Generated idempotently per incident: **remote_action** (CPE), **confirming_test**
 (confidence <0.75, not CPE/drop/power), **dispatch** (not CPE/power; held if an ancestor is
 already repairing → `rolls_avoided`), **notification** (always; power outage bumps
-`rolls_avoided`), **credit** (any line past the window). Approve is role-gated
-(`src/lib/roles.ts`): NOC Lead → dispatch/test/remote; CX Ops → notification/credit.
+`rolls_avoided`), **credit** (any line past the window), **account_alert** (business
+accounts in the blast radius, holdout excluded), **home_visit** (CPE fault whose remote
+reboot failed → a CFS job), **retention_offer** (lines down ≥3 h, holdout excluded), and per
+city **campaign_hold** (≥3% of a city's lines and ≥8 lines down; auto-released below 1%).
+Approval is persona-gated (`src/lib/roles.ts` → `APPROVER`): NOC Lead → dispatch/test/remote;
+Customer Service → notification/credit; Sales Force → account_alert; CFS → home_visit;
+Brand & Marketing → campaign_hold/retention_offer. The last-mile partner approves nothing
+but files close-outs.
 Execute effects: crew job (travel by area 25/55/90 min ±20%, repair ≈ p50×U(0.75,1.25));
 notification sets `blast_radius.notified_at` → ticketing suppresses would-be callers
-(`calls_deflected`); credit cuts `churn_hazard`.
+(`calls_deflected`); credit and retention offer cut `churn_hazard`; account alerts mark
+business lines notified; home visits create a `crew_type='cfs'` job; campaign holds insert
+`campaign_holds`. Every finished job files a `partner_reports` close-out (see §3.7), and a
+resolved incident with notified customers gets a `closure` ("service restored") notice.
+Power outages auto-restore after ~4 h (utility), never get a fiber crew.
 
 ### 5.6 Verification & Learn (`verification.ts`, `learn-ops.ts`)
 Repaired incident → `verifying` for a 20-sim-min window. If the underlying fault is cleared →
@@ -389,7 +417,12 @@ The SSE payload shape (`OpsSnapshot`) is in [`src/lib/types.ts`](src/lib/types.t
 | `/api/learn` · `/api/learn/retrain` · `/api/corrections/[id]/accept` | GET/POST | metrics + retrain + accept |
 | `/api/ask` | POST | GE assistant (canned tools / live Gemini) |
 | `/api/geo` | GET | recorded-topology geometry for the map (lat/lon, parent, confidence, `est` flag) |
-| `/api/director/inject` · `/sensing` · `/scenario` | POST | scenario control |
+| `/api/outcomes` | GET | the shared outcome scoreboard per persona (also drives presenter captions) |
+| `/api/care` | GET | Customer Service: `?q=` caller search, `?line=` the answer for one caller, live callers |
+| `/api/sales` · `/api/field` · `/api/partners` · `/api/marketing` | GET | persona workspace read models |
+| `/api/partners/closeout` | POST | `{jobId, role:"partner"}` — partner files a close-out for an on-site job |
+| `/api/handoffs` | GET | `?incident=` — what each persona has done on one incident |
+| `/api/director/inject` · `/sensing` · `/scenario` | POST | scenario control; `scenario {name:"leadership_demo"}` prepares the one-click demo |
 
 ---
 
@@ -410,6 +443,9 @@ from**. Map each synthetic generator to a real feed:
 | `subscribers` | **billing / CRM** (ARPU, VIP/B2B, tenure) | `calling_propensity`/`churn_hazard` become learned models |
 | `vendors` + `mttr_model` | **workforce/field-service system** + historical work orders | retrain (§5.6) from real closures |
 | `crew_jobs` transitions | **field dispatch app callbacks** (enroute/onsite/closed) | replace the simulated travel/repair timers |
+| `partner_reports` | **partner field-service app close-out form** (found-at element, root cause, photos, record discrepancies) | the last-mile feedback loop — make the record-discrepancy fields mandatory |
+| `campaign_holds.spend_per_day` | **marketing automation / ad platforms** (paid acquisition by city) | the hold itself becomes an API call to pause geo-targeted campaigns |
+| CFS jobs (`crew_type='cfs'`) | **home-visit scheduling (CFS)** | booked only from an approved `home_visit` proposal |
 | `holdout` | **experiment/holdout framework** | for real lift measurement |
 | `districts.power_grid` | **utility outage feeds / grid maps** | powers the power-outage guardrail |
 
